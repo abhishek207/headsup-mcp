@@ -2,7 +2,8 @@
   "mcpServers": {
     "heads-up": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/server.mjs"]
+      "args": ["./server.mjs"],
+      "cwd": "."
     }
   }
 }

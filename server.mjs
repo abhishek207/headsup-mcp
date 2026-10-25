@@ -6,7 +6,7 @@
 // config.json; run `headsup` for the settings page.
 
 import { createInterface } from "node:readline";
-import { STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, projectFor, textFor } from "./core.mjs";
+import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, projectFor, textFor } from "./core.mjs";
 
 const config = loadConfig();
 const PREPARE_WAIT_MS = 15_000; // how long the tool waits for a live line to be recorded
@@ -49,9 +49,13 @@ const TOOL = {
   },
 };
 
+// The user's project folder. Claude Code starts the server there; Codex starts plugin
+// servers in the plugin's own folder, so use the PWD inherited from the session instead.
+const projectDir = () => (process.cwd() === ROOT && process.env.PWD && process.env.PWD !== ROOT ? process.env.PWD : process.cwd());
+
 async function callTool(args = {}) {
   const message = typeof args.message === "string" && args.message.trim() ? args.message : null;
-  const r = alert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(process.cwd()), message });
+  const r = alert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(projectDir()), message });
   if (!r.ok) return { isError: true, content: [{ type: "text", text: r.error }] };
   if (!r.played) return { content: [{ type: "text", text: `Not played: ${r.reason}. This is the user's setting; don't retry.` }] };
   if (!message) return { content: [{ type: "text", text: `Playing "${r.line}"` }] };

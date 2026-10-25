@@ -1,6 +1,8 @@
 import { DATA } from "./helpers.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
@@ -40,4 +42,17 @@ test("MCP server: initialize, list, call", () => {
 test("MCP server: bad JSON gets a parse error, not a crash", () => {
   const r = spawnSync(process.execPath, [SERVER], { input: "{oops\n", encoding: "utf8", env: { ...process.env, HEADS_UP_HOME: DATA } });
   assert.equal(JSON.parse(r.stdout).error.code, -32700);
+});
+
+test("MCP server: started in its own folder (Codex), it names the session's project from PWD", () => {
+  const project = join(DATA, "brand-bakery");
+  mkdirSync(project, { recursive: true });
+  spawnSync(process.execPath, [SERVER], {
+    cwd: dirname(SERVER),
+    input: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "notify_user", arguments: { status: "review" } } }) + "\n",
+    encoding: "utf8",
+    env: { ...process.env, HEADS_UP_HOME: DATA, HEADS_UP_DISABLED: "1", PWD: project },
+  });
+  const [last] = JSON.parse(readFileSync(join(DATA, "state.json"), "utf8")).history;
+  assert.equal(last.project, "brand-bakery");
 });
