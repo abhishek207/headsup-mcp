@@ -1,6 +1,11 @@
 {
   "name": "heads-up",
-  "owner": { "name": "Abhishek" },
+  "owner": {
+    "name": "Abhishek"
+  },
+  "metadata": {
+    "description": "Heads-up: spoken voice alerts on your Mac for Claude Code and Codex."
+  },
   "plugins": [
     {
       "name": "heads-up",

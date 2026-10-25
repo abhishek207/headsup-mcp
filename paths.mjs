@@ -15,15 +15,16 @@ mkdirSync(DATA, { recursive: true });
 
 export const HELPER = [join(DATA, "bin", "media-in-use"), join(ROOT, "bin", "media-in-use")].find((p) => existsSync(p)) ?? join(DATA, "bin", "media-in-use");
 
-// The headsup command (~/.local/bin/headsup) runs the code from DATA/root: the copy that ran last.
-// A plugin update moves the code, so every run keeps this pointing at itself.
-const ROOT_FILE = join(DATA, "root");
-try {
-  if (readFileSync(ROOT_FILE, "utf8") !== ROOT) writeFileSync(ROOT_FILE, ROOT);
-} catch {
+// The headsup command (~/.local/bin/headsup) runs the code in DATA/root. The installer
+// writes it; an installed plugin copy (under .../plugins/cache/...) keeps it current after
+// an update moves the code. Checkouts and test copies never take it over.
+export function rememberRoot(root = ROOT) {
   try {
-    writeFileSync(ROOT_FILE, ROOT);
+    writeFileSync(join(DATA, "root"), root);
   } catch {
     // read-only DATA: the command falls back to where it was installed from
   }
 }
+const ROOT_FILE = join(DATA, "root");
+const recorded = existsSync(ROOT_FILE) ? readFileSync(ROOT_FILE, "utf8") : null;
+if (/\/plugins\/cache\//.test(ROOT) && recorded !== ROOT) rememberRoot();

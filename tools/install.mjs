@@ -22,7 +22,7 @@ import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { DATA, ROOT } from "../paths.mjs";
+import { DATA, ROOT, rememberRoot } from "../paths.mjs";
 
 export const MARKETPLACE = "heads-up";
 export const PLUGIN = `heads-up@${MARKETPLACE}`;
@@ -187,7 +187,7 @@ async function main() {
   // 3. Claude Code
   say("•", `Plugin source: ${source}`);
   if (claude) {
-    run("claude", ["mcp", "remove", "heads-up", "-s", "user"]); // pre-plugin setup; fine if absent
+    if (run("claude", ["mcp", "get", "heads-up"]).status === 0) step("remove the pre-plugin heads-up MCP server from Claude Code", "claude", ["mcp", "remove", "heads-up", "-s", "user"]);
     step("add the heads-up marketplace to Claude Code", "claude", ["plugin", "marketplace", "add", source], already);
     step("refresh the heads-up marketplace", "claude", ["plugin", "marketplace", "update", MARKETPLACE]);
     step("install the heads-up plugin in Claude Code", "claude", ["plugin", "install", PLUGIN], already);
@@ -206,7 +206,7 @@ async function main() {
 
   // 5. Command
   const installed = claude ? pluginPath(claudeDir) : null;
-  if (!dry) writeFileSync(join(DATA, "root"), installed ?? ROOT);
+  if (!dry) rememberRoot(installed ?? ROOT);
   const l = lstatSync(link, { throwIfNoEntry: false });
   if (l && !ourShim()) say("!", `${link} exists and isn't heads-up's; left alone.`);
   else
