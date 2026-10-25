@@ -36,6 +36,7 @@ Local macOS MCP server + Claude Code hooks that speak short alerts ("Hello from 
 - Live speech, edited wording, library voices and project names all go through `prepare()` → `compose()`: guardrails and volume caps apply as for any alert, automatic recording respects `live.daily_chars`, and every failure falls back to a built-in clip with a `note` (never an error).
 - Spending: generating audio costs the user's credits. Dry-run, state the character count, and get a go-ahead before any batch. Project names are capped at 20 new names per day.
 - Keep the page's design language: liquid glass on an indigo/violet/cyan gradient, SF Pro (system font), one accent gradient for "on", amber only for "silent now", sentence case, no all-caps labels.
+- Dark mode is warm charcoal with a violet-to-rose accent: no blue or navy, no glows, no edge lines. Depth comes from shadow and fill only (the owner's call). Colours and depth are CSS variables on `:root` and both dark blocks; change them there, not in component rules.
 
 ## Testing without noise
 
