@@ -147,13 +147,15 @@ export async function providerVoices(provider) {
     for (const v of j.voices ?? []) {
       const l = v.labels ?? {};
       const cap = (s) => (s ? String(s)[0].toUpperCase() + String(s).slice(1) : "");
+      // Library names often carry a tagline: "Pari M (Regional Bank Support)", "Brian - Deep". Keep it as a description.
+      const [, name, tagline] = String(v.name ?? v.voice_id).match(/^(.*?)(?:\s+-\s+|\s*\()(.*?)\)?$/) ?? [null, String(v.name ?? v.voice_id), ""];
       voices.push({
         provider,
         provider_id: v.voice_id,
-        name: String(v.name ?? v.voice_id).split(/\s+-\s+/)[0].slice(0, 40),
+        name: name.slice(0, 40),
         accent: cap(l.accent),
         gender: cap(l.gender),
-        about: [l.age, l.descriptive ?? l.description, l.use_case].filter(Boolean).join(", ").replace(/_/g, " "),
+        about: [tagline, l.age, l.descriptive ?? l.description, l.use_case].filter(Boolean).join(", ").replace(/_/g, " "),
         preview: /^https:\/\//.test(v.preview_url ?? "") ? v.preview_url : null,
       });
     }
