@@ -5,7 +5,7 @@
 import { createReadStream, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import { GREETING, HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isProjectName, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, textFor } from "./core.mjs";
+import { GREETING, HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, textFor } from "./core.mjs";
 import { composed, usageSummary, voiceInfo } from "./speech.mjs";
 import { PROVIDERS, checkKey, deleteKey, elevenUsage, keySource, providerVoices, saveKey } from "./tts.mjs";
 
@@ -173,13 +173,13 @@ const server = createServer(async (req, res) => {
       }
     }
     if (req.method === "POST" && url.pathname === "/api/voices/add") {
+      // Added and selected at once; it falls back to the built-in voice in use until now.
       const v = await readBody(req);
       const c = loadConfig();
       const fallback = builtinVoices().includes(c.voice) ? c.voice : voiceInfo(c.voice, c)?.fallback;
-      const next = saveConfig({ ...c, custom_voices: [...c.custom_voices, { ...v, fallback }] });
-      const added = next.custom_voices.find((x) => x.provider === v.provider && x.provider_id === v.provider_id);
-      if (!added) return json(400, { error: "That voice couldn't be added" });
-      saveConfig({ ...next, voice: added.id });
+      const id = libraryVoiceId(v);
+      const next = saveConfig({ ...c, custom_voices: [...c.custom_voices, { ...v, fallback }], voice: id });
+      if (next.voice !== id) return json(400, { error: "That voice couldn't be added" });
       return json(200, await state());
     }
     if (req.method === "POST" && url.pathname === "/api/voices/remove") {

@@ -81,6 +81,7 @@ async function elevenlabs(voiceId, text, key, { fast = false } = {}) {
   return { data: Buffer.from(await r.arrayBuffer()), ext: "mp3" };
 }
 
+// Sarvam has one model speed, so the fast option doesn't apply.
 async function sarvam(speaker, text, key) {
   const r = await fetch("https://api.sarvam.ai/text-to-speech", {
     method: "POST",
@@ -162,16 +163,20 @@ export async function providerVoices(provider) {
   return voices;
 }
 
+// ElevenLabs' plan endpoint: free to call, and the cheapest way to see whether a key works.
+const subscription = (key) => fetch(`${EL}/v1/user/subscription`, { headers: { "xi-api-key": key }, signal: AbortSignal.timeout(8000) });
+
 // The user's ElevenLabs plan usage: { used, limit, resets } in credits, or null if the key
-// can't read it (keys can be restricted). Free to call.
+// can't read it (keys can be restricted).
 export async function elevenUsage() {
   const key = getKey("elevenlabs");
   if (!key || fake()) return null;
   try {
-    const r = await fetch(`${EL}/v1/user/subscription`, { headers: { "xi-api-key": key }, signal: AbortSignal.timeout(8000) });
+    const r = await subscription(key);
     if (!r.ok) return null;
     const j = await r.json();
-    return { used: j.character_count, limit: j.character_limit, resets: j.next_character_count_reset_unix ? new Date(j.next_character_count_reset_unix * 1000).toISOString() : null, tier: j.tier ?? null };
+    const resets = j.next_character_count_reset_unix ? new Date(j.next_character_count_reset_unix * 1000).toISOString() : null;
+    return { used: j.character_count, limit: j.character_limit, resets };
   } catch {
     return null;
   }
@@ -182,7 +187,7 @@ export async function elevenUsage() {
 export async function checkKey(provider, key) {
   if (provider !== "elevenlabs" || fake()) return "unknown";
   try {
-    const r = await fetch(`${EL}/v1/user/subscription`, { headers: { "xi-api-key": key }, signal: AbortSignal.timeout(8000) });
+    const r = await subscription(key);
     if (r.ok) return "valid";
     const body = await r.text();
     if (/missing_permission/i.test(body)) return "valid";

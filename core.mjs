@@ -62,7 +62,10 @@ export const DEFAULTS = {
 };
 
 const LIMITS = { wording_chars: 120, custom_voices: 30 };
-const text = (s, n) => String(s ?? "").replace(/[^\p{L}\p{N} .,'&()-]/gu, "").trim().slice(0, n);
+const label = (s, n) => String(s ?? "").replace(/[^\p{L}\p{N} .,'&()-]/gu, "").trim().slice(0, n);
+
+// The id a library voice gets in config and in DATA folders: "el-<voice id>", "sarvam-<speaker>".
+export const libraryVoiceId = (v) => `${v.provider === "sarvam" ? "sarvam" : "el"}-${v.provider_id}`;
 
 // Library voices: { id, provider, provider_id, name, accent, gender, fallback }. id is derived,
 // fallback is the built-in voice to use when this one can't be recorded (no key, budget).
@@ -71,12 +74,12 @@ function cleanCustomVoices(list) {
   return (Array.isArray(list) ? list : [])
     .filter((v) => PROVIDERS.includes(v?.provider) && /^[A-Za-z0-9_-]{1,64}$/.test(v.provider_id ?? ""))
     .map((v) => ({
-      id: `${v.provider === "sarvam" ? "sarvam" : "el"}-${v.provider_id}`,
+      id: libraryVoiceId(v),
       provider: v.provider,
       provider_id: v.provider_id,
-      name: text(v.name, 40) || v.provider_id,
-      accent: text(v.accent, 30),
-      gender: text(v.gender, 20),
+      name: label(v.name, 40) || v.provider_id,
+      accent: label(v.accent, 30),
+      gender: label(v.gender, 20),
       fallback: builtin.includes(v.fallback) ? v.fallback : FALLBACK_VOICE,
     }))
     .filter((v, i, all) => all.findIndex((x) => x.id === v.id) === i)
@@ -535,13 +538,15 @@ export async function prepare(voice, status, { project = null, message = null, f
   const messages = [{ text: wording, msgId: status, msgTrack: wording === t.text ? builtin : null }];
   if (message && (c.live.enabled || force)) messages.unshift({ text: message, msgId: "live", fast: c.live.fast, live: true });
   else if (message) note = "live messages are switched off";
-  kind ??= force ? "test" : null;
+  // What the characters are logged as on the page: tests, Claude's lines, names, wording or new voices.
+  const kindOf = (g, m) => kind ?? (force ? "test" : m.live ? "live" : g.greetId !== "greeting" ? "names" : builtin ? "wording" : "voices");
+  const budget = force ? undefined : c.live.daily_chars;
   for (const m of messages) {
     for (const g of greetings) {
       const line = `${g.greet} ${m.text}`;
       if (g.greetTrack && m.msgTrack) return { file: builtin, line, live: false, note };
       try {
-        const file = await compose(voice, c, { ...g, ...m, budget: force ? undefined : c.live.daily_chars, kind: kind ?? (m.live ? "live" : g.greetId !== "greeting" ? "names" : builtin ? "wording" : "voices") });
+        const file = await compose(voice, c, { ...g, ...m, budget, kind: kindOf(g, m) });
         return { file, line, live: Boolean(m.live), note };
       } catch (e) {
         note ??= e instanceof Skip ? e.message : `recording failed (${String(e.message).slice(0, 120)})`;

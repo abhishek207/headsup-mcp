@@ -689,8 +689,8 @@ function sweep() {
 
 async function play(id, voice) {
   try {
-    const needs = S.recordCost[voice ?? S.config.voice];
-    if (needs) toast("Recording with your key…");
+    const v = voice ?? S.config.voice;
+    if (S.recordCost[v] && S.keys[infoOf(v)?.provider]) toast("Recording with your key…");
     const r = await api("/api/test", voice ? { status: id, voice } : { status: id });
     await loadWave(voice ?? S.config.voice, id).catch(() => {});
     sweep();
@@ -762,14 +762,9 @@ function render() {
       <button type="button" class="icon remove" data-remove-voice="${esc(v.id)}" aria-label="Remove ${esc(v.name)}">${X_SVG}</button>
     </label>`).join("") + `<button type="button" class="voice add" id="addVoice" aria-expanded="${lib.open}">Add a voice</button>`;
 
-  const cost = S.recordCost[c.voice] ?? 0, info = infoOf(c.voice) ?? {}, pname = PROVIDER[info.provider];
-  const edited = Object.keys(c.wording).length;
-  const note = !cost ? (isCustom(c.voice) ? `All alerts are recorded in ${esc(info.name)}.` : "")
-    : !S.keys[info.provider] ? `Add a ${pname} key below to record ${isCustom(c.voice) ? "alerts in " + esc(info.name) : "your edited lines"}. Until then you'll hear the built-in ${isCustom(c.voice) ? esc(voiceName(info.fallback)) + " voice" : "lines"}.`
-    : isCustom(c.voice) ? `Each alert is recorded in ${esc(info.name)} the first time it plays. Recording all of them now uses about ${num(cost)} ${pname} characters.`
-    : `${edited === 1 ? "Your edited line isn't" : "Some edited lines aren't"} recorded in this voice yet: about ${num(cost)} ${pname} characters.`;
+  const note = voiceNote();
   $("#voiceNote").hidden = !note;
-  $("#voiceNote").innerHTML = note ? `<div class="row"><div class="text"><div class="desc">${note}</div></div>${cost && S.keys[info.provider] ? `<div class="controls"><button class="btn" id="recordAll">Record now</button></div>` : ""}</div>` : "";
+  $("#voiceNote").innerHTML = note ? `<div class="row"><div class="text"><div class="desc">${esc(note.text)}</div></div>${note.record ? `<div class="controls"><button class="btn" id="recordAll">Record now</button></div>` : ""}</div>` : "";
   renderLibrary();
 
   if (!document.activeElement?.closest(".edit-row")) $("#alerts").innerHTML = GROUPS.map((g) => `
@@ -870,6 +865,21 @@ function render() {
     </div>`).join("");
 
   if (wave.voice !== c.voice) loadWave(c.voice, wave.id).catch(() => {});
+}
+
+// What still needs recording in the selected voice, or null. record: whether "Record now" can run.
+function voiceNote() {
+  const c = S.config, cost = S.recordCost[c.voice] ?? 0, info = infoOf(c.voice) ?? {}, pname = PROVIDER[info.provider];
+  const custom = isCustom(c.voice);
+  if (!cost) return custom ? { text: `All alerts are recorded in ${info.name}.` } : null;
+  if (!S.keys[info.provider]) {
+    return { text: custom
+      ? `Add a ${pname} key below to record alerts in ${info.name}. Until then you'll hear the ${voiceName(info.fallback)} voice.`
+      : `Add a ${pname} key below to record your edited lines. Until then you'll hear the original ones.` };
+  }
+  return { record: true, text: custom
+    ? `Each alert is recorded in ${info.name} the first time it plays. Recording all of them now uses about ${num(cost)} ${pname} characters.`
+    : `Your edited wording isn't recorded in this voice yet: about ${num(cost)} ${pname} characters.` };
 }
 
 function renderLibrary() {
