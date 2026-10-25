@@ -1,0 +1,25 @@
+{
+  "greeting": "Hello.",
+  "templates": [
+    { "id": "completed", "text": "I've completed the task.", "when": "the task is done" },
+    { "id": "review", "text": "I need your review.", "when": "work is ready for the user to review (diff, design, document)" },
+    { "id": "feedback", "text": "I need your feedback.", "when": "you want the user's opinion on a draft or direction" },
+    { "id": "input", "text": "I need your input.", "when": "you need information or a decision from the user" },
+    { "id": "approval", "text": "I need your approval to continue.", "when": "you are waiting on a permission prompt or go-ahead" },
+    { "id": "question", "text": "I have a quick question for you.", "when": "you have a short clarifying question" },
+    { "id": "blocked", "text": "I'm stuck, and I need your help.", "when": "you cannot make progress without the user" },
+    { "id": "error", "text": "Something went wrong. Please take a look.", "when": "an unexpected error or crash needs the user's attention" },
+    { "id": "tests_passed", "text": "All the tests are passing.", "when": "a test run finished green" },
+    { "id": "tests_failed", "text": "Some tests are failing.", "when": "a test run finished with failures you could not fix" },
+    { "id": "deployed", "text": "The deployment is live.", "when": "a deploy or release succeeded" },
+    { "id": "deploy_failed", "text": "The deployment failed.", "when": "a deploy or release failed" },
+    { "id": "pr_ready", "text": "The pull request is ready.", "when": "a PR is open and ready for the user" },
+    { "id": "next_task", "text": "I'm ready for the next task.", "when": "you are idle and waiting for new work" },
+    { "id": "limit_warning", "text": "I'm close to my usage limit.", "when": "usage or quota is nearly used up" },
+    { "id": "limit_reached", "text": "I've hit my usage limit.", "when": "usage or quota is used up and work stopped" },
+    { "id": "sign_in", "text": "I need you to sign in.", "when": "a login, OAuth or credential step needs the user" },
+    { "id": "long_task", "text": "This will take a while. I'll let you know when it's done.", "when": "you are starting something long and the user can step away" },
+    { "id": "progress", "text": "Quick update. I'm still working on it.", "when": "a long task is still running" },
+    { "id": "reminder", "text": "I'm still waiting on you.", "when": "you asked for something earlier and are still waiting" }
+  ]
+}

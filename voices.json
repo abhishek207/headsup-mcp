@@ -1,0 +1,51 @@
+{
+  "american-male": {
+    "accent": "American",
+    "gender": "Male",
+    "speaker": "Brian",
+    "provider": "elevenlabs",
+    "provider_id": "nPczCjzI2devNBz1zQrb"
+  },
+  "american-female": {
+    "accent": "American",
+    "gender": "Female",
+    "speaker": "Sarah",
+    "provider": "elevenlabs",
+    "provider_id": "EXAVITQu4vr4xnSDxMaL"
+  },
+  "british-male": {
+    "accent": "British",
+    "gender": "Male",
+    "speaker": "George",
+    "provider": "elevenlabs",
+    "provider_id": "JBFqnCBsd6RMkjVDRZzb"
+  },
+  "british-female": {
+    "accent": "British",
+    "gender": "Female",
+    "speaker": "Alice",
+    "provider": "elevenlabs",
+    "provider_id": "Xb7hH8MSUJpSbSDYk0k2"
+  },
+  "australian-male": {
+    "accent": "Australian",
+    "gender": "Male",
+    "speaker": "Charlie",
+    "provider": "elevenlabs",
+    "provider_id": "IKne3meq5aSn9XLyUdCD"
+  },
+  "indian-male": {
+    "accent": "Indian",
+    "gender": "Male",
+    "speaker": "Aditya",
+    "provider": "sarvam",
+    "provider_id": "aditya"
+  },
+  "indian-female": {
+    "accent": "Indian",
+    "gender": "Female",
+    "speaker": "Priya",
+    "provider": "sarvam",
+    "provider_id": "priya"
+  }
+}
