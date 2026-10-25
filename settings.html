@@ -261,6 +261,7 @@
   /* Settings column */
   main { min-width: 0; padding-top: 4px; }
   section { margin-bottom: 44px; }
+  .credits { margin: 8px 0 24px; color: var(--ink-3); font-size: 12px; }
   section > h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.025em; margin: 0 0 4px; }
   section > .lede { margin: 0 0 16px; color: var(--ink-2); max-width: 62ch; }
   h3 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 22px 4px 8px; }
@@ -555,10 +556,6 @@
           <div class="controls"><label class="switch"><input type="checkbox" data-k="calls.mic" aria-label="Silent when a microphone is in use"><span></span></label></div>
         </div>
         <div class="row">
-          <div class="text"><div class="title">When a camera is in use</div><div class="desc" id="camDesc">Video calls and recordings</div></div>
-          <div class="controls"><label class="switch"><input type="checkbox" data-k="calls.camera" aria-label="Silent when a camera is in use"><span></span></label></div>
-        </div>
-        <div class="row">
           <div class="text"><div class="title">When a Focus is on</div><div class="desc" id="focusDesc">Focus modes you switch on, and scheduled ones</div></div>
           <div class="controls"><label class="switch"><input type="checkbox" data-k="calls.focus" aria-label="Silent when a Focus is on"><span></span></label></div>
         </div>
@@ -631,6 +628,8 @@
       <p class="lede">Needed to record anything new: project names, your own wording, added voices and Claude's own lines. The built-in alerts work without a key. Keys go into your macOS Keychain and are never shown again.</p>
       <div class="group" id="keyList"></div>
     </section>
+
+    <footer class="credits">Heads-up · Built and maintained by Brand Bakery · Voices by ElevenLabs (elevenlabs.io) and Sarvam</footer>
   </main>
 </div>
 <div id="toast" role="status"></div>
@@ -753,7 +752,7 @@ function stateView() {
   if (b?.startsWith("location lock")) return ["amber", "Silent", "Location lock is on, but no locations are saved yet."];
   if (b?.startsWith("quiet hours")) return ["amber", "Quiet hours", "Alerts resume at " + c.quiet_hours.end + "."];
   if (b?.startsWith("Focus is on")) return ["amber", "Focus on", S.focus + " Focus is on. Alerts resume when it ends."];
-  if (b?.startsWith("you're on a call")) return ["amber", "On a call", "Your " + (b.includes("camera") ? "camera" : "microphone") + " is in use. Alerts resume when the call ends."];
+  if (b?.startsWith("you're on a call")) return ["amber", "On a call", "Your microphone is in use. Alerts resume when the call ends."];
   if (b?.startsWith("hourly")) return ["amber", "Paused", "The hourly limit is reached. Alerts resume within the hour."];
   if (b) return ["amber", "Silent", b];
   const where = here ? "here at " + here : "on any network";
@@ -866,10 +865,9 @@ function render() {
   const problem = (start, fallback) => (S.detectorProblems ?? []).find((p) => p.startsWith(start)) ?? fallback;
   const noCalls = problem("Call detection", "Can't check right now");
   const noFocus = problem("Focus detection", "Can't read macOS Focus settings right now");
-  $("#factCalls").textContent = !m ? "Unavailable" : m.camera ? "Camera in use" : m.mic ? "Mic in use" : "None";
+  $("#factCalls").textContent = !m ? "Unavailable" : m.mic ? "Mic in use" : "None";
   $("#factFocus").textContent = !S.focusReadable ? "Unavailable" : S.focus ?? "Off";
   $("#micDesc").textContent = !m ? noCalls : m.mic ? "In use right now" : "Zoom, Meet, FaceTime, dictation";
-  $("#camDesc").textContent = !m ? noCalls : m.camera ? "In use right now" : "Video calls and recordings";
   $("#focusDesc").textContent = !S.focusReadable ? noFocus : S.focus ? S.focus + " is on right now" : "Focus modes you switch on, and scheduled ones";
 
   const provider = infoOf(c.voice)?.provider;

@@ -125,7 +125,7 @@ test("Focus: manual, scheduled, and unreadable", () => {
 
 test("detector problems are reported, not hidden", () => {
   const on = normalize({});
-  assert.deepEqual(detectorProblems(on, { media: { mic: false, camera: false }, helper: true, focus: true }), []);
+  assert.deepEqual(detectorProblems(on, { media: { mic: false }, helper: true, focus: true }), []);
   const [notBuilt, noFocus] = detectorProblems(on, { media: null, helper: false, focus: false });
   assert.match(notBuilt, /headsup install/);
   assert.match(noFocus, /Focus detection/);

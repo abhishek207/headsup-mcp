@@ -12,6 +12,6 @@ delete process.env.SARVAM_API_KEY;
 delete process.env.HEADS_UP_FAKE_TTS;
 
 // Config with every live detector off, so results don't depend on the Mac running the tests.
-export const quiet = { calls: { mic: false, camera: false, focus: false }, away: { enabled: false } };
+export const quiet = { calls: { mic: false, focus: false }, away: { enabled: false } };
 // quiet, with the key-only features (project names, the model's own lines) switched on.
 export const optedIn = { ...quiet, project_names: { enabled: true }, live: { enabled: true } };

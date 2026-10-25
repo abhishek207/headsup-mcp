@@ -41,8 +41,8 @@ export const DEFAULTS = {
   chime: true,
   // Speak only after this long without keyboard or mouse input.
   away: { enabled: true, idle_seconds: 60 },
-  // Stay silent while a mic or camera is in use (calls) or a Focus is on.
-  calls: { mic: true, camera: true, focus: true },
+  // Stay silent while a microphone is in use (calls) or a Focus is on.
+  calls: { mic: true, focus: true },
   // "Hello from <project>." instead of "Hello." Opt-in: needs the user's own TTS key.
   project_names: { enabled: false, aliases: {}, muted: [] },
   // Claude Code hooks (hook.mjs): alerts that don't depend on Claude remembering.
@@ -125,7 +125,6 @@ export function normalize(c = {}) {
     },
     calls: {
       mic: c.calls?.mic !== false,
-      camera: c.calls?.camera !== false,
       focus: c.calls?.focus !== false,
     },
     project_names: {
@@ -259,7 +258,7 @@ export function idleSeconds() {
   }
 }
 
-// Whether any app is using a microphone or camera ({ mic, camera }), or null if unknown.
+// Whether any app is using a microphone ({ mic }), or null if unknown.
 // The helper (media-in-use) only reads device state, so it never lights the privacy indicator.
 
 export function mediaInUse() {
@@ -285,10 +284,10 @@ export const probeDetectors = () => ({ media: mediaInUse(), helper: existsSync(M
 // Without this, a missing helper or unreadable Focus file just means alerts play during calls.
 export function detectorProblems(c = loadConfig(), probe = probeDetectors()) {
   const problems = [];
-  if ((c.calls.mic || c.calls.camera) && !probe.media) {
+  if (c.calls.mic && !probe.media) {
     problems.push(probe.helper
       ? "Call detection isn't working: media-in-use didn't answer."
-      : "Call detection is off: the mic and camera checker isn't built. Run headsup install.");
+      : "Call detection is off: the microphone checker isn't built. Run headsup install.");
   }
   if (c.calls.focus && !probe.focus) problems.push("Focus detection isn't working: macOS Focus settings couldn't be read.");
   return problems;
@@ -331,10 +330,9 @@ export function blockedReason(status, c = loadConfig(), now = Date.now()) {
     const focus = activeFocus(new Date(now));
     if (focus) return `Focus is on (${focus})`;
   }
-  if (c.calls.mic || c.calls.camera) {
+  if (c.calls.mic) {
     const m = mediaInUse();
-    if (m && c.calls.camera && m.camera) return "you're on a call (camera in use)";
-    if (m && c.calls.mic && m.mic) return "you're on a call (microphone in use)";
+    if (m?.mic) return "you're on a call (microphone in use)";
   }
   if (c.away.enabled) {
     const idle = idleSeconds();

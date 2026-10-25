@@ -10,6 +10,7 @@
 //   headsup install      install the plugin in Claude Code (and Codex); uninstall to undo
 
 import { spawn, execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT, STATUSES, activeFocus, alert, blockedReason, currentLocation, detectorProblems, loadConfig, probeDetectors, saveConfig } from "./core.mjs";
 import { usageSummary } from "./speech.mjs";
@@ -68,7 +69,7 @@ switch (cmd) {
     console.log(`Location: ${here.location ?? "unsaved network"}${c.location_lock ? " (location lock on)" : ""}`);
     const probe = probeDetectors();
     const m = probe.media;
-    console.log(`Calls:    ${!(c.calls.mic || c.calls.camera) ? "off" : !m ? "unavailable" : m.camera ? "camera in use" : m.mic ? "mic in use" : "none"}`);
+    console.log(`Calls:    ${!c.calls.mic ? "off" : !m ? "unavailable" : m.mic ? "mic in use" : "none"}`);
     console.log(`Focus:    ${!c.calls.focus ? "off" : !probe.focus ? "unavailable" : (activeFocus() ?? "none")}`);
     for (const p of detectorProblems(c, probe)) console.log(`Warning:  ${p}`);
     break;
@@ -104,11 +105,18 @@ switch (cmd) {
     if (a) console.log(`ElevenLabs plan: ${a.used} of ${a.limit} credits used${a.resets ? `, resets ${new Date(a.resets).toLocaleDateString()}` : ""}`);
     break;
   }
+  case "version":
+  case "--version":
+  case "-v": {
+    const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+    console.log(`Heads-up ${version}. Built and maintained by Brand Bakery.`);
+    break;
+  }
   case "install":
   case "uninstall":
     execFileSync(process.execPath, [join(ROOT, "tools", "install.mjs"), ...(cmd === "uninstall" ? ["--uninstall"] : []), ...process.argv.slice(3)], { stdio: "inherit" });
     break;
   default:
-    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert] | say <words> | usage | install | uninstall]");
+    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert] | say <words> | usage | install | uninstall | version]");
     console.log(`Alerts: ${Object.keys(STATUSES).join(", ")}`);
 }
