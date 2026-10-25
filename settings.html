@@ -306,6 +306,8 @@
   }
   .switch input:checked + span { background: var(--accent); }
   .switch input:checked + span::after { transform: translateX(18px); }
+  .switch input:disabled { cursor: default; }
+  .switch input:disabled + span { opacity: .4; }
   .switch input:focus-visible + span { outline: 2px solid var(--accent-a); outline-offset: 2px; }
   body.ready .switch span { transition: background .2s; }
   body.ready .switch span::after { transition: transform .25s cubic-bezier(.3, 1.4, .5, 1); }
@@ -624,7 +626,7 @@
       <div id="volGroups"></div>
     </section>
 
-    <section>
+    <section id="keys">
       <h2>Voice provider keys</h2>
       <p class="lede">Needed to record anything new: project names, your own wording, added voices and Claude's own lines. The built-in alerts work without a key. Keys go into your macOS Keychain and are never shown again.</p>
       <div class="group" id="keyList"></div>
@@ -791,6 +793,10 @@ function render() {
     else if (document.activeElement !== el) el.value = el.dataset.scale ? Math.round(v / el.dataset.scale) : v;
   });
 
+  // Project names and Claude's own lines need a key; the server keeps them off without one.
+  const anyKey = Boolean(S.keys.elevenlabs || S.keys.sarvam);
+  for (const k of ["live.enabled", "project_names.enabled"]) $(`[data-k="${k}"]`).disabled = !anyKey;
+
   $("#voices").innerHTML = S.voices.map((v) => {
     const i = S.voiceInfo[v] ?? {};
     return `<label class="voice ${v === c.voice ? "sel" : ""}">
@@ -868,9 +874,9 @@ function render() {
 
   const provider = infoOf(c.voice)?.provider;
   const providerName = provider === "sarvam" ? "Sarvam" : "ElevenLabs";
-  $("#namesDesc").textContent = S.keys[provider]
-    ? "New names are recorded with your " + providerName + " key, about 20 characters each."
-    : "Add a " + providerName + " key below to record names. Until then, alerts just say “Hello.”";
+  $("#namesDesc").textContent = !anyKey ? "Needs your own ElevenLabs or Sarvam key (see Voice provider keys). Until then, alerts just say “Hello.”"
+    : S.keys[provider] ? "New names are recorded with your " + providerName + " key, about 20 characters each."
+    : "Add a " + providerName + " key below to record names in this voice. Until then, alerts just say “Hello.”";
   $("#projectList").innerHTML = S.projects.length
     ? S.projects.map((p) => `
       <div class="row ${p.muted ? "off" : ""}">
@@ -883,7 +889,8 @@ function render() {
       </div>`).join("")
     : '<div class="row"><div class="text"><div class="desc">Projects appear here after their first alert. Type a spelling to change how a name is said.</div></div></div>';
 
-  $("#liveDesc").textContent = !c.live.enabled ? "Off: Claude's lines are ignored and the regular alert plays."
+  $("#liveDesc").textContent = !anyKey ? "Needs your own ElevenLabs or Sarvam key (see Voice provider keys). Until then the regular alert plays."
+    : !c.live.enabled ? "Off: Claude's lines are ignored and the regular alert plays."
     : S.keys[provider] ? "Lines are recorded with your " + PROVIDER[provider] + " key and sent to " + PROVIDER[provider] + ", so Claude is told to keep code and secrets out of them."
     : "Add a " + PROVIDER[provider] + " key below. Until then the regular alert plays.";
   const u = S.usage, acct = S.account?.elevenlabs;
