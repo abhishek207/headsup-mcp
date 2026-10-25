@@ -51,7 +51,7 @@ From a checkout, `npm run setup` does the same with the local copy. It's safe to
 2. builds the call detector into the data folder (needs `swiftc`),
 3. adds the heads-up marketplace and installs the plugin in Claude Code, and allows its `notify_user` tool in `~/.claude/settings.json` (backup in `settings.json.heads-up-backup`). Without the allow rule the first alert in each session waits on a permission prompt, which defeats the point when you're away,
 4. removes the pre-plugin setup if it finds it (MCP entry, hooks, CLAUDE.md section), so alerts don't double,
-5. adds the marketplace to Codex if it's installed; finish there with `/plugins` (install Heads-up) and `/hooks` (trust its hooks),
+5. installs the plugin in Codex too if Codex is installed; trust its hooks once there with `/hooks`,
 6. writes the `headsup` command to `~/.local/bin`.
 
 `headsup uninstall` takes it all out again and keeps your settings.

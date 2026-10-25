@@ -11,7 +11,7 @@
 //   2. builds the call detector into DATA/bin (needs Xcode command line tools)
 //   3. Claude Code: adds the heads-up marketplace and installs the plugin, allows its
 //      notify_user tool, and removes the pre-plugin setup (MCP entry, hooks, CLAUDE.md section)
-//   4. Codex: adds the marketplace and says how to finish in Codex
+//   4. Codex: adds the marketplace and installs the plugin; its hooks still need trusting in /hooks
 //   5. writes the headsup command to ~/.local/bin
 // Anything it can't do is printed with the command to do it by hand.
 //
@@ -163,6 +163,7 @@ async function main() {
       step("remove the heads-up marketplace from Claude Code", "claude", ["plugin", "marketplace", "remove", MARKETPLACE], (r) => /not found/i.test(why(r)));
       run("claude", ["mcp", "remove", "heads-up", "-s", "user"]);
     }
+    if (codex) step("uninstall the heads-up plugin from Codex", "codex", ["plugin", "remove", PLUGIN], (r) => /not installed|not found/i.test(why(r)));
     if (codex) step("remove the heads-up marketplace from Codex", "codex", ["plugin", "marketplace", "remove", MARKETPLACE], (r) => /not found/i.test(why(r)));
     editSettings(withoutHeadsUp, "remove heads-up's allow rule and any old hooks from ~/.claude/settings.json");
     removeOldSection();
@@ -201,7 +202,8 @@ async function main() {
   // 4. Codex
   if (codex) {
     step("add the heads-up marketplace to Codex", "codex", ["plugin", "marketplace", "add", source], already);
-    say("!", "In Codex: open /plugins and install Heads-up, then open /hooks and trust its three hooks (Codex asks before running any plugin hook).");
+    step("install the heads-up plugin in Codex", "codex", ["plugin", "add", PLUGIN], already);
+    say("!", "In Codex, open /hooks once and trust heads-up's three hooks (Codex asks before running any plugin hook).");
   }
 
   // 5. Command
