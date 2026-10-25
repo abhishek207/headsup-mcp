@@ -51,7 +51,12 @@ const TOOL = {
 
 // The user's project folder. Claude Code starts the server there; Codex starts plugin
 // servers in the plugin's own folder, so use the PWD inherited from the session instead.
-const projectDir = () => (process.cwd() === ROOT && process.env.PWD && process.env.PWD !== ROOT ? process.env.PWD : process.cwd());
+// Codex starts the server in the plugin folder; PWD may still name the session's project.
+// If all we can see is our own folder, there's no project to name.
+const projectDir = () => {
+  const dir = process.cwd() === ROOT && process.env.PWD ? process.env.PWD : process.cwd();
+  return dir === ROOT ? null : dir;
+};
 
 async function callTool(args = {}) {
   const message = typeof args.message === "string" && args.message.trim() ? args.message : null;
