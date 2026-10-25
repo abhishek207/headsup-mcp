@@ -7,9 +7,11 @@
 //   headsup test [id]    play an alert now, ignoring guardrails
 //   headsup say <words>  speak your own line now with your key (like Claude's messages)
 //   headsup usage        characters sent to your voice providers
+//   headsup version      version and maker
 //   headsup install      install the plugin in Claude Code (and Codex); uninstall to undo
 
 import { spawn, execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT, STATUSES, activeFocus, alert, blockedReason, currentLocation, detectorProblems, loadConfig, probeDetectors, saveConfig } from "./core.mjs";
 import { usageSummary } from "./speech.mjs";
@@ -108,7 +110,14 @@ switch (cmd) {
   case "uninstall":
     execFileSync(process.execPath, [join(ROOT, "tools", "install.mjs"), ...(cmd === "uninstall" ? ["--uninstall"] : []), ...process.argv.slice(3)], { stdio: "inherit" });
     break;
+  case "version":
+  case "--version":
+  case "-v": {
+    const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+    console.log(`Heads-up ${version}. Built and maintained by Brand Bakery: https://brandbakery.tech`);
+    break;
+  }
   default:
-    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert] | say <words> | usage | install | uninstall]");
+    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert] | say <words> | usage | install | uninstall | version]");
     console.log(`Alerts: ${Object.keys(STATUSES).join(", ")}`);
 }

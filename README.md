@@ -114,10 +114,10 @@ Use it, fork it, change it. Outside pull requests aren't accepted and are closed
 
 ## License
 
-Copyright (C) 2026 Brand Bakery.
+Copyright (C) 2026 [Brand Bakery](https://brandbakery.tech).
 
 The code is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0-only): use, change and share it freely; if you distribute a modified version, it must stay under the GPL with its source available. The built-in clips in `voices/` aren't covered by it; see [voices/NOTICE.md](voices/NOTICE.md).
 
 ---
 
-Built and maintained by **Brand Bakery**.
+Built and maintained by **[Brand Bakery](https://brandbakery.tech)**.

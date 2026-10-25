@@ -1,7 +1,8 @@
 {
   "name": "heads-up",
   "owner": {
-    "name": "Brand Bakery"
+    "name": "Brand Bakery",
+    "url": "https://brandbakery.tech"
   },
   "metadata": {
     "description": "Heads-up: spoken voice alerts on your Mac for Claude Code and Codex."

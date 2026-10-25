@@ -257,6 +257,9 @@
   .recent .skipped .what::before { background: var(--ink-3); }
   .recent .why { grid-column: 2; color: var(--ink-3); margin-top: -2px; }
   .empty { color: var(--ink-3); font-size: 13px; margin: 0; }
+  .credits { margin: 8px 0 24px; color: var(--ink-3); font-size: 12px; }
+  .credits a { color: var(--accent-a); font-weight: 600; text-decoration: none; }
+  .credits a:hover { text-decoration: underline; }
 
   /* Settings column */
   main { min-width: 0; padding-top: 4px; }
@@ -631,6 +634,7 @@
       <p class="lede">Needed to record anything new: project names, your own wording, added voices and Claude's own lines. The built-in alerts work without a key. Keys go into your macOS Keychain and are never shown again.</p>
       <div class="group" id="keyList"></div>
     </section>
+    <footer class="credits">Heads-up · Built and maintained by <a href="https://brandbakery.tech" target="_blank" rel="noopener">Brand Bakery</a> · Voices by ElevenLabs (elevenlabs.io) and Sarvam</footer>
   </main>
 </div>
 <div id="toast" role="status"></div>
