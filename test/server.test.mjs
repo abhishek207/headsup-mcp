@@ -63,7 +63,7 @@ test("MCP server: started in its own folder with no other clue, it names no proj
     cwd: dirname(SERVER),
     input: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "notify_user", arguments: { status: "review" } } }) + "\n",
     encoding: "utf8",
-    env: { ...process.env, HEADS_UP_HOME: DATA, HEADS_UP_DISABLED: "1", PWD: dirname(SERVER) },
+    env: { ...process.env, HEADS_UP_HOME: DATA, HEADS_UP_DISABLED: "1", PWD: dirname(SERVER) + "/." },
   });
   const [last] = JSON.parse(readFileSync(join(DATA, "state.json"), "utf8")).history;
   assert.equal(last.project ?? null, null);

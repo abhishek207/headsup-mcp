@@ -5,6 +5,7 @@
 // ElevenLabs or Sarvam key. Guardrails and settings live in core.mjs and
 // config.json; run `headsup` for the settings page.
 
+import { resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, projectFor, textFor } from "./core.mjs";
 
@@ -51,11 +52,10 @@ const TOOL = {
 
 // The user's project folder. Claude Code starts the server there; Codex starts plugin
 // servers in the plugin's own folder, so use the PWD inherited from the session instead.
-// Codex starts the server in the plugin folder; PWD may still name the session's project.
-// If all we can see is our own folder, there's no project to name.
+// If all we can see is our own folder (or something inside it), there's no project to name.
 const projectDir = () => {
-  const dir = process.cwd() === ROOT && process.env.PWD ? process.env.PWD : process.cwd();
-  return dir === ROOT ? null : dir;
+  const dir = resolve(process.cwd() === ROOT && process.env.PWD ? process.env.PWD : process.cwd());
+  return dir === ROOT || dir.startsWith(ROOT + sep) ? null : dir;
 };
 
 async function callTool(args = {}) {
@@ -77,7 +77,7 @@ async function handle(msg) {
       return {
         protocolVersion: msg.params?.protocolVersion ?? "2025-06-18",
         capabilities: { tools: {} },
-        serverInfo: { name: "heads-up", version: "1.5.1" },
+        serverInfo: { name: "heads-up", version: "1.5.2" },
       };
     case "ping":
       return {};
