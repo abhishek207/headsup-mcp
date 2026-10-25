@@ -42,7 +42,7 @@ In Claude Code, one step:
 Or from a terminal, which also builds the call detector and adds the `headsup` command:
 
 ```bash
-npx github:abhishek207/headsup-mcp install      # add --dry-run to see the changes first
+npx headsup-mcp install      # add --dry-run to see the changes first
 ```
 
 From a checkout, `npm run setup` does the same with the local copy. It's safe to run again after an update. It:
@@ -97,6 +97,6 @@ Claude's lines are sent to your provider to be spoken, so Claude is told to keep
 - The settings page's "Recent alerts" shows every alert, played or skipped, with the reason.
 - `HEADS_UP_DISABLED=1` silences everything for one process (handy for tests).
 
-## Voices
+## Voices and credits
 
-Built-in clips were generated with ElevenLabs (Brian, Sarah, George, Alice, Charlie) and Sarvam Bulbul v3 (Aditya, Priya). Check each provider's terms before redistributing generated audio.
+The built-in English clips were made with [ElevenLabs](https://elevenlabs.io) (elevenlabs.io): voices Brian, Sarah, George, Alice and Charlie. The Indian English clips were made with [Sarvam AI](https://www.sarvam.ai) Bulbul v3: voices Aditya and Priya. Lines you record with your own key are made under your own account and your provider's terms.

@@ -1,13 +1,36 @@
 {
   "name": "headsup-mcp",
   "version": "1.5.0",
-  "description": "Spoken voice alerts on your Mac when Claude Code finishes a task or needs you.",
+  "description": "Spoken voice alerts on your Mac when Claude Code or Codex finishes a task or needs you.",
+  "keywords": [
+    "mcp",
+    "claude-code",
+    "codex",
+    "plugin",
+    "voice",
+    "alerts",
+    "notifications",
+    "macos",
+    "tts",
+    "elevenlabs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abhishek207/headsup-mcp.git"
+  },
+  "homepage": "https://github.com/abhishek207/headsup-mcp#readme",
+  "author": "Abhishek (https://github.com/abhishek207)",
   "type": "module",
-  "private": true,
   "license": "UNLICENSED",
-  "os": ["darwin"],
-  "engines": { "node": ">=20" },
-  "bin": { "headsup": "cli.mjs" },
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "headsup": "cli.mjs"
+  },
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "build": "mkdir -p bin && swiftc -O tools/media-in-use.swift -o bin/media-in-use",
@@ -16,5 +39,20 @@
     "settings": "node cli.mjs settings",
     "status": "node cli.mjs status",
     "voices:dry-run": "node tools/generate.mjs --dry-run"
-  }
+  },
+  "files": [
+    ".claude-plugin/",
+    ".codex-plugin/",
+    "hooks/",
+    "skills/",
+    "assets/",
+    "voices/",
+    "tools/install.mjs",
+    "tools/media-in-use.swift",
+    "*.mjs",
+    "settings.html",
+    "templates.json",
+    "voices.json",
+    "README.md"
+  ]
 }

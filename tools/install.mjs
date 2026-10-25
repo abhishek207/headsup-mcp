@@ -3,7 +3,7 @@
 //   headsup install              install or update
 //   headsup install --dry-run    show what would change, change nothing
 //   headsup uninstall            take it all out again (keeps your settings and recordings)
-//   npx github:abhishek207/headsup-mcp install    the same, without a checkout
+//   npx headsup-mcp install      the same, without a checkout
 //
 // Heads-up ships as a plugin for Claude Code and Codex (MCP server, skill and hooks in one).
 // This script:

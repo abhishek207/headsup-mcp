@@ -1,6 +1,6 @@
 # Heads-up: working notes for Claude
 
-Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak short alerts ("Hello from Kosh. I need your review."). Zero npm dependencies, plain Node ESM, one small Swift helper. Full background and history: `docs/PROJECT_SUMMARY.md`.
+Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak short alerts ("Hello from Kosh. I need your review."). Zero npm dependencies, plain Node ESM, one small Swift helper. User-facing docs: `README.md`.
 
 ## Map
 
