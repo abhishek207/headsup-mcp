@@ -168,6 +168,7 @@ async function main() {
     editSettings(withoutHeadsUp, "remove heads-up's allow rule and any old hooks from ~/.claude/settings.json");
     removeOldSection();
     if (ourShim()) act("remove ~/.local/bin/headsup", () => rmSync(link));
+    if (existsSync(join(DATA, "root"))) act("forget where the plugin was installed", () => rmSync(join(DATA, "root")));
     console.log(`\nYour settings and recordings are still in ${DATA}. Delete that folder to remove them too.`);
     return;
   }
