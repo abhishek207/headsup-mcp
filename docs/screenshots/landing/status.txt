@@ -1,0 +1,9 @@
+Alerts:   active
+Away:     speaks after 60s without keyboard or mouse input
+Hooks:    permission on, long tasks on (2 min), reminder off
+Voice:    american-male
+Live:     on, up to 160 characters a line, 1000 a day
+Keys:     ElevenLabs shared keychain, Sarvam shared keychain
+Location: Home
+Calls:    none
+Focus:    none
