@@ -718,11 +718,14 @@ function render() {
   document.querySelectorAll("input[type=range]").forEach(fill);
 
   const m = S.media;
-  $("#factCalls").textContent = !m ? "–" : m.camera ? "Camera in use" : m.mic ? "Mic in use" : "None";
-  $("#factFocus").textContent = S.focus ?? "Off";
-  $("#micDesc").textContent = m?.mic ? "In use right now" : "Zoom, Meet, FaceTime, dictation";
-  $("#camDesc").textContent = m?.camera ? "In use right now" : "Video calls and recordings";
-  $("#focusDesc").textContent = S.focus ? S.focus + " is on right now" : "Focus modes you switch on, and scheduled ones";
+  const problem = (start, fallback) => (S.detectorProblems ?? []).find((p) => p.startsWith(start)) ?? fallback;
+  const noCalls = problem("Call detection", "Can't check right now");
+  const noFocus = problem("Focus detection", "Can't read macOS Focus settings right now");
+  $("#factCalls").textContent = !m ? "Unavailable" : m.camera ? "Camera in use" : m.mic ? "Mic in use" : "None";
+  $("#factFocus").textContent = !S.focusReadable ? "Unavailable" : S.focus ?? "Off";
+  $("#micDesc").textContent = !m ? noCalls : m.mic ? "In use right now" : "Zoom, Meet, FaceTime, dictation";
+  $("#camDesc").textContent = !m ? noCalls : m.camera ? "In use right now" : "Video calls and recordings";
+  $("#focusDesc").textContent = !S.focusReadable ? noFocus : S.focus ? S.focus + " is on right now" : "Focus modes you switch on, and scheduled ones";
 
   const provider = S.voiceInfo[c.voice]?.provider;
   const providerName = provider === "sarvam" ? "Sarvam" : "ElevenLabs";

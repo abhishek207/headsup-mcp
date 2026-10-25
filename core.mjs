@@ -4,7 +4,7 @@
 // to every running Claude session.
 
 import { execFile, execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -210,19 +210,44 @@ export function idleSeconds() {
 
 // Whether any app is using a microphone or camera ({ mic, camera }), or null if unknown.
 // bin/media-in-use only reads device state, so it never lights the privacy indicator.
+const MEDIA_HELPER = join(ROOT, "bin", "media-in-use");
+
 export function mediaInUse() {
   try {
-    return JSON.parse(execFileSync(join(ROOT, "bin", "media-in-use"), { encoding: "utf8", timeout: 2000 }));
+    return JSON.parse(execFileSync(MEDIA_HELPER, { encoding: "utf8", timeout: 2000 }));
   } catch {
     return null;
   }
 }
 
+const FOCUS_DB = join(homedir(), "Library", "DoNotDisturb", "DB");
+
+// Whether macOS's Focus settings can be read at all. If Apple moves or changes them,
+// Focus detection stops working, and this is how status and the page find out.
+export function focusReadable(db = FOCUS_DB) {
+  return Boolean(readJson(join(db, "ModeConfigurations.json"), null)?.data?.[0]?.modeConfigurations);
+}
+
+// What the call and Focus detectors can see right now.
+export const probeDetectors = () => ({ media: mediaInUse(), helper: existsSync(MEDIA_HELPER), focus: focusReadable() });
+
+// Switched-on detectors that can't work right now, as sentences. Empty when all is well.
+// Without this, a missing helper or unreadable Focus file just means alerts play during calls.
+export function detectorProblems(c = loadConfig(), probe = probeDetectors()) {
+  const problems = [];
+  if ((c.calls.mic || c.calls.camera) && !probe.media) {
+    problems.push(probe.helper
+      ? "Call detection isn't working: bin/media-in-use didn't answer."
+      : "Call detection is off: the mic and camera checker isn't built. Run npm run build.");
+  }
+  if (c.calls.focus && !probe.focus) problems.push("Focus detection isn't working: macOS Focus settings couldn't be read.");
+  return problems;
+}
+
 // Name of the active Focus ("Work", "Do Not Disturb"), or null. Reads the files macOS
 // keeps for Focus: manually switched-on modes, plus enabled time schedules.
 // Sleep and smart (location/app) triggers aren't recorded there, so they aren't seen.
-export function activeFocus(now = new Date()) {
-  const db = join(homedir(), "Library", "DoNotDisturb", "DB");
+export function activeFocus(now = new Date(), db = FOCUS_DB) {
   const modes = readJson(join(db, "ModeConfigurations.json"), {})?.data?.[0]?.modeConfigurations ?? {};
   const nameOf = (id) => modes[id]?.mode?.name ?? "Focus";
   const records = readJson(join(db, "Assertions.json"), {})?.data?.[0]?.storeAssertionRecords ?? [];
@@ -297,33 +322,88 @@ export async function outputDevice() {
 }
 
 // Returns the volume to use during the alert, or null to leave it alone.
-function alertVolume({ vol, muted }, limits, headphones, requested) {
+export function alertVolume({ vol, muted }, limits, headphones, requested) {
   if (requested !== undefined) return Math.min(requested, limits.cap);
   if (muted || vol < limits.floor) return limits.target;
   if (headphones && vol > limits.cap) return limits.cap;
   return null;
 }
 
-async function play(files, c, requested) {
-  let before = null;
+// One alert plays at a time across every Claude session, through a lock file in DATA.
+// The lock also holds the volume to restore, so if a process dies mid-alert the next
+// alert puts the volume back first instead of leaving the Mac loud.
+const PLAY_LOCK = join(DATA, "playing.lock");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const alive = (pid) => {
   try {
-    if (c.volume.auto || requested !== undefined) {
-      const current = await getVolume();
-      const { headphones } = await outputDevice();
-      const vol = alertVolume(current, headphones ? c.volume.headphones : c.volume.speakers, headphones, requested);
-      if (vol !== null) {
-        before = current;
-        await setVolume(vol, false);
-      }
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === "EPERM";
+  }
+};
+
+async function takeOverStaleLock() {
+  // Rename first so only one process handles a given stale lock.
+  const mine = `${PLAY_LOCK}.${process.pid}.stale`;
+  try {
+    renameSync(PLAY_LOCK, mine);
+  } catch {
+    return; // someone else got it
+  }
+  const held = readJson(mine, null);
+  rmSync(mine, { force: true });
+  if (held?.before) await setVolume(held.before.vol, held.before.muted).catch(() => {});
+}
+
+export async function withPlayLock(fn, { waitMs = 30_000 } = {}) {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try {
+      writeFileSync(PLAY_LOCK, JSON.stringify({ pid: process.pid }), { flag: "wx" });
+      break;
+    } catch (e) {
+      if (e.code !== "EEXIST") throw e;
     }
-    for (const [i, f] of files.entries()) {
-      if (i) await new Promise((r) => setTimeout(r, 300));
-      await run("afplay", [f]);
+    const held = readJson(PLAY_LOCK, null);
+    const age = Date.now() - (statSync(PLAY_LOCK, { throwIfNoEntry: false })?.mtimeMs ?? Date.now());
+    // Unreadable for a minute means it was never finished being written.
+    if (held ? !alive(held.pid) : age > 60_000) {
+      await takeOverStaleLock();
+      continue;
     }
+    if (Date.now() > deadline) throw new Error("another alert is still playing");
+    await sleep(200);
+  }
+  try {
+    return await fn((before) => writeFileSync(PLAY_LOCK, JSON.stringify({ pid: process.pid, before })));
   } finally {
-    if (before) await setVolume(before.vol, before.muted).catch(() => {});
+    rmSync(PLAY_LOCK, { force: true });
   }
 }
+
+const play = (files, c, requested) =>
+  withPlayLock(async (remember) => {
+    let before = null;
+    try {
+      if (c.volume.auto || requested !== undefined) {
+        const current = await getVolume();
+        const { headphones } = await outputDevice();
+        const vol = alertVolume(current, headphones ? c.volume.headphones : c.volume.speakers, headphones, requested);
+        if (vol !== null) {
+          before = current;
+          remember(before);
+          await setVolume(vol, false);
+        }
+      }
+      for (const [i, f] of files.entries()) {
+        if (i) await sleep(300);
+        await run("afplay", [f]);
+      }
+    } finally {
+      if (before) await setVolume(before.vol, before.muted).catch(() => {});
+    }
+  });
 
 // Project names: "Hello from Kosh. I need your review."
 const SEGMENTS = join(DATA, "segments");
@@ -431,7 +511,7 @@ export function alert(status, { repeat = 1, volume, force = false, source = "cla
   record({ status, source, ...(project && { project }), ...meta, result: reason ? "skipped" : "played", ...(reason && { reason }) });
   if (reason) return { ok: true, played: false, reason };
   const vol = Number.isFinite(volume) ? Math.min(100, Math.max(0, volume)) : undefined;
-  const times = Math.min(3, Math.max(1, repeat));
+  const times = clamp(repeat, 1, 3, 1);
   queue = queue
     .then(async () => {
       const named = project ? await projectClip(useVoice, status, project, c).catch((e) => (process.stderr.write(`heads-up: ${e.message}\n`), null)) : null;

@@ -1,6 +1,6 @@
 {
   "name": "headsup-mcp",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Spoken voice alerts on your Mac when Claude Code finishes a task or needs you.",
   "type": "module",
   "private": true,
@@ -9,6 +9,7 @@
   "engines": { "node": ">=20" },
   "bin": { "headsup": "cli.mjs" },
   "scripts": {
+    "test": "node --test test/*.test.mjs",
     "build": "mkdir -p bin && swiftc -O tools/media-in-use.swift -o bin/media-in-use",
     "settings": "node cli.mjs settings",
     "status": "node cli.mjs status",

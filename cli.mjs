@@ -8,7 +8,7 @@
 
 import { spawn, execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { ROOT, STATUSES, alert, blockedReason, currentLocation, loadConfig, saveConfig } from "./core.mjs";
+import { ROOT, STATUSES, activeFocus, alert, blockedReason, currentLocation, detectorProblems, loadConfig, probeDetectors, saveConfig } from "./core.mjs";
 
 const PORT = 4777;
 const URL = `http://127.0.0.1:${PORT}`;
@@ -59,6 +59,11 @@ switch (cmd) {
     console.log(`Hooks:    permission ${c.hooks.permission ? "on" : "off"}, long tasks ${c.hooks.long_turn ? `on (${Math.round(c.hooks.long_turn_seconds / 60)} min)` : "off"}, reminder ${c.hooks.idle_reminder ? "on" : "off"}`);
     console.log(`Voice:    ${c.voice}`);
     console.log(`Location: ${here.location ?? "unsaved network"}${c.location_lock ? " (location lock on)" : ""}`);
+    const probe = probeDetectors();
+    const m = probe.media;
+    console.log(`Calls:    ${!(c.calls.mic || c.calls.camera) ? "off" : !m ? "unavailable" : m.camera ? "camera in use" : m.mic ? "mic in use" : "none"}`);
+    console.log(`Focus:    ${!c.calls.focus ? "off" : !probe.focus ? "unavailable" : (activeFocus() ?? "none")}`);
+    for (const p of detectorProblems(c, probe)) console.log(`Warning:  ${p}`);
     break;
   }
   case "test": {

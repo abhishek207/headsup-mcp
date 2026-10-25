@@ -5,7 +5,7 @@
 // config.json; run `headsup` for the settings page.
 
 import { createInterface } from "node:readline";
-import { STATUSES, TEMPLATES, alert, projectFor } from "./core.mjs";
+import { STATUSES, TEMPLATES, alert, detectorProblems, projectFor } from "./core.mjs";
 
 const TOOL = {
   name: "notify_user",
@@ -49,7 +49,7 @@ function handle(msg) {
       return {
         protocolVersion: msg.params?.protocolVersion ?? "2025-06-18",
         capabilities: { tools: {} },
-        serverInfo: { name: "heads-up", version: "1.3.0" },
+        serverInfo: { name: "heads-up", version: "1.3.1" },
       };
     case "ping":
       return {};
@@ -62,6 +62,9 @@ function handle(msg) {
       throw { code: -32601, message: `Method not found: ${msg.method}` };
   }
 }
+
+// Claude Code shows server stderr in its MCP logs; say so if calls or Focus can't be detected.
+for (const p of detectorProblems()) process.stderr.write(`heads-up: ${p}\n`);
 
 const send = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
 

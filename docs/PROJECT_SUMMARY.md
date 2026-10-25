@@ -2,7 +2,7 @@
 
 A detailed handover of everything built so far, why it's built this way, and what's next. Written so a new Claude thread (or Claude Project) can pick up without the original conversation.
 
-*Last updated: 25 October 2026. Version 1.3.0.*
+*Last updated: 25 October 2026. Version 1.3.1.*
 
 ---
 
@@ -211,11 +211,18 @@ Not yet verified live:
 
 ---
 
+### 8.1 Automated tests (`npm test`, added in 1.3.1)
+21 tests with `node:test`, no dependencies: config clamps and hard caps, guardrail order, quiet hours across midnight, cooldown and hourly limit, alert volume, Focus parsing from fixture files (manual, schedules, weekday bit), detector warnings, the cross-session play lock (including a dead holder), the MCP server over stdio, and the hooks (background sessions, short and long turns, permission prompt). They run in a temp `HEADS_UP_HOME` with `HEADS_UP_DISABLED=1`, so nothing plays.
+
+### 8.2 Fixes in 1.3.1
+- Call and Focus detection no longer fail silently. If `bin/media-in-use` isn't built or the Focus files can't be read, `headsup status`, the settings page ("Unavailable") and the MCP server log say so.
+- Playback is locked across processes (`DATA/playing.lock`). Two sessions alerting at once used to be able to leave the volume at the alert level (the second read the raised volume as "before"). A crash mid-alert used to do the same; the next alert now restores the saved volume first.
+- A fractional `repeat` (e.g. 1.5) made playback throw while the tool still said "Playing". It's rounded now.
+
 ## 9. Known limitations
 
 - macOS only.
 - Focus: Sleep and smart (location/app) triggers aren't readable; schedule weekday bit order is assumed (Sunday = bit 0).
-- If a session is force-quit mid-alert, the volume may stay at the alert level.
 - Sessions started before an update keep the old MCP code until restarted.
 - The settings server must be started (`headsup`); it stops after 30 idle minutes (alerts don't need it).
 - Mic-in-use also catches dictation apps (fine: you're at the keyboard then).

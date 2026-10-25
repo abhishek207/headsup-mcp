@@ -5,7 +5,7 @@
 import { createReadStream, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import { HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, clipFor, currentLocation, getVolume, idleSeconds, isProjectName, listVoices, loadConfig, loadHistory, mediaInUse, nameRecorded, outputDevice, saveConfig, spokenName } from "./core.mjs";
+import { HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, clipFor, currentLocation, detectorProblems, getVolume, idleSeconds, isProjectName, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, saveConfig, spokenName } from "./core.mjs";
 import { PROVIDERS, deleteKey, keySource, saveKey } from "./tts.mjs";
 
 export const PORT = 4777;
@@ -23,6 +23,7 @@ const readJson = (file, fallback) => {
 async function state() {
   const config = loadConfig();
   const [volume, device] = await Promise.all([getVolume().catch(() => null), outputDevice()]);
+  const probe = probeDetectors();
   // Overall state: ignore per-alert switches (shown separately) and away
   // detection (you're always at the keyboard while using this page).
   const allOn = Object.fromEntries(Object.keys(config.statuses).map((s) => [s, true]));
@@ -40,8 +41,11 @@ async function state() {
     volume,
     device,
     idle: idleSeconds(),
-    media: mediaInUse(),
+    media: probe.media,
     focus: activeFocus(),
+    focusReadable: probe.focus,
+    // Switched-on detectors that can't see anything (helper not built, Focus file unreadable).
+    detectorProblems: detectorProblems(config, probe),
     projects: projects(config),
     // Where each provider's key comes from; the key itself never leaves the server.
     keys: Object.fromEntries(PROVIDERS.map((p) => [p, keySource(p)])),
