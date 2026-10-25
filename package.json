@@ -1,6 +1,6 @@
 {
   "name": "headsup-mcp",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Spoken voice alerts on your Mac when Claude Code or Codex finishes a task or needs you.",
   "keywords": [
     "mcp",
