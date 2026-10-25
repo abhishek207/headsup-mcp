@@ -5,10 +5,15 @@
 //   headsup mute [min]   mute for N minutes (default 60); unmute to undo
 //   headsup status       show what would happen right now
 //   headsup test [id]    play an alert now, ignoring guardrails
+//   headsup say <words>  speak your own line now with your key (like Claude's messages)
+//   headsup usage        characters sent to your voice providers
+//   headsup install      set up Claude Code (MCP, hooks, command); uninstall to undo
 
 import { spawn, execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { ROOT, STATUSES, activeFocus, alert, blockedReason, currentLocation, detectorProblems, loadConfig, probeDetectors, saveConfig } from "./core.mjs";
+import { usageSummary } from "./speech.mjs";
+import { elevenUsage, keySource } from "./tts.mjs";
 
 const PORT = 4777;
 const URL = `http://127.0.0.1:${PORT}`;
@@ -57,7 +62,9 @@ switch (cmd) {
     console.log(`Alerts:   ${reason ? `blocked (${reason})` : "active"}`);
     console.log(`Away:     ${c.away.enabled ? `speaks after ${c.away.idle_seconds}s without keyboard or mouse input` : "off"}`);
     console.log(`Hooks:    permission ${c.hooks.permission ? "on" : "off"}, long tasks ${c.hooks.long_turn ? `on (${Math.round(c.hooks.long_turn_seconds / 60)} min)` : "off"}, reminder ${c.hooks.idle_reminder ? "on" : "off"}`);
-    console.log(`Voice:    ${c.voice}`);
+    console.log(`Voice:    ${c.custom_voices.find((v) => v.id === c.voice)?.name ?? c.voice}`);
+    console.log(`Live:     ${c.live.enabled ? `on, up to ${c.live.max_chars} characters a line, ${c.live.daily_chars} a day` : "off"}`);
+    console.log(`Keys:     ElevenLabs ${keySource("elevenlabs") ?? "none"}, Sarvam ${keySource("sarvam") ?? "none"}`);
     console.log(`Location: ${here.location ?? "unsaved network"}${c.location_lock ? " (location lock on)" : ""}`);
     const probe = probeDetectors();
     const m = probe.media;
@@ -77,7 +84,31 @@ switch (cmd) {
     await r.done;
     break;
   }
+  case "say": {
+    const words = process.argv.slice(3).join(" ").trim();
+    if (!words) {
+      console.error('Usage: headsup say "The build is green."');
+      process.exit(1);
+    }
+    const r = alert("completed", { force: true, source: "cli test", message: words });
+    const p = await r.prepared;
+    console.log(p.live ? `Playing "${p.line}"` : `Playing "${p.line}" (yours wasn't spoken: ${p.note})`);
+    await r.done;
+    break;
+  }
+  case "usage": {
+    const u = usageSummary();
+    console.log(`Today:      ElevenLabs ${u.today.elevenlabs}, Sarvam ${u.today.sarvam} characters`);
+    console.log(`This month: ElevenLabs ${u.month.elevenlabs}, Sarvam ${u.month.sarvam} characters`);
+    const a = await elevenUsage();
+    if (a) console.log(`ElevenLabs plan: ${a.used} of ${a.limit} credits used${a.resets ? `, resets ${new Date(a.resets).toLocaleDateString()}` : ""}`);
+    break;
+  }
+  case "install":
+  case "uninstall":
+    execFileSync(process.execPath, [join(ROOT, "tools", "install.mjs"), ...(cmd === "uninstall" ? ["--uninstall"] : []), ...process.argv.slice(3)], { stdio: "inherit" });
+    break;
   default:
-    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert]]");
+    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert] | say <words> | usage | install | uninstall]");
     console.log(`Alerts: ${Object.keys(STATUSES).join(", ")}`);
 }

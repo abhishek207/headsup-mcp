@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Heads-up</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <script>
   // Apply the saved theme before first paint. "auto" (or nothing saved) follows the Mac.
   try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
@@ -145,7 +146,8 @@
   /* Status panel */
   .panel { position: sticky; top: 32px; border-radius: 30px; padding: 24px; }
   .panel-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
-  .brand { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; box-shadow: 0 4px 12px -4px rgba(30, 20, 80, .6); }
   .theme, .segmented {
     display: flex; gap: 2px; padding: 3px; border-radius: 999px;
     background: var(--track-off);
@@ -281,6 +283,10 @@
   .voice .vtext { flex: 1; min-width: 0; }
   .voice .accent { font-weight: 600; letter-spacing: -0.01em; }
   .voice .meta { font-size: 13px; color: var(--ink-2); }
+  .voice .remove { width: 26px; height: 26px; }
+  .voice .remove svg { width: 9px; height: 9px; margin: 0; }
+  .voice.add { justify-content: center; color: var(--ink-2); font-weight: 600; border-style: dashed; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; min-height: 66px; }
+  .voice.add:hover { color: var(--accent-a); border-color: var(--accent-a); }
   .voice.sel {
     border-color: transparent;
     background: linear-gradient(var(--glass-strong), var(--glass-strong)) padding-box, var(--accent) border-box;
@@ -302,6 +308,19 @@
   .val { min-width: 44px; text-align: right; font-weight: 600; }
 
   .note { font-size: 13px; color: var(--ink-2); margin: 10px 4px 0; }
+  .stack { margin-top: 12px; }
+  .lib-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .lib-head .segmented { display: flex; }
+  .lib-head .segmented button { padding: 0 14px; }
+  .lib-head .segmented button[aria-pressed="true"] { background: var(--glass-strong); color: var(--ink); box-shadow: 0 1px 3px rgba(15, 23, 60, .15); }
+  .lib-head .field { flex: 1; min-width: 160px; }
+  .lib-list { max-height: 420px; overflow: auto; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent-a); background: var(--accent-soft); border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: 1px; }
+  .edit-row { background: var(--accent-soft); }
+  .edit-row .field { flex: 1; min-width: 200px; }
+  #sayText { width: 280px; max-width: 100%; }
+  .count { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+  .icon.small svg { width: 12px; height: 12px; margin: 0; }
 
   #toast {
     position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 8px);
@@ -337,7 +356,7 @@
 <div class="app">
   <aside class="panel" id="panel" data-tone="signal" aria-live="polite">
     <div class="panel-top">
-      <p class="brand">Heads-up</p>
+      <p class="brand"><img src="/favicon.svg" alt="">Heads-up</p>
       <div class="theme" role="group" aria-label="Theme">
         <button data-theme-set="auto">Auto</button>
         <button data-theme-set="light">Light</button>
@@ -391,13 +410,25 @@
   <main>
     <section>
       <h2>Voice</h2>
-      <p class="lede">Who speaks the alerts. Press play to hear a voice on your Mac before choosing it.</p>
+      <p class="lede">Who speaks the alerts. Press play to hear a voice on your Mac before choosing it. You can add any voice from your ElevenLabs account or Sarvam's speakers too.</p>
       <div class="voices" id="voices" role="radiogroup" aria-label="Voice"></div>
+      <div class="group stack" id="voiceNote" hidden></div>
+      <div id="library" hidden>
+        <h3>Add a voice</h3>
+        <div class="group">
+          <div class="row lib-head">
+            <div class="segmented" role="group" aria-label="Provider"><button data-lib="elevenlabs">ElevenLabs</button><button data-lib="sarvam">Sarvam</button></div>
+            <input class="field" id="libSearch" placeholder="Search by name, accent or style" aria-label="Search voices">
+            <button class="btn" data-lib-close>Done</button>
+          </div>
+          <div class="lib-list" id="libList"></div>
+        </div>
+      </div>
     </section>
 
     <section>
       <h2>Alerts</h2>
-      <p class="lede">Each one starts with "Hello." Turn off the ones you don't want to hear.</p>
+      <p class="lede">Each one starts with "Hello." Turn off the ones you don't want to hear, or change the words: your version is recorded in your voice with your own key.</p>
       <div id="alerts"></div>
     </section>
 
@@ -422,6 +453,39 @@
           <div class="controls"><label class="switch"><input type="checkbox" data-k="hooks.idle_reminder" aria-label="Remind me when Claude is waiting"><span></span></label></div>
         </div>
       </div>
+    </section>
+
+    <section>
+      <h2>Claude's own words</h2>
+      <p class="lede">When a fixed line doesn't say enough, Claude can speak a short line of its own, like “The migration ran, but two tables need your review.” It's recorded with your key, and the same switches, quiet times and volume caps apply. If it can't be recorded, the regular alert plays instead.</p>
+      <div class="group">
+        <div class="row">
+          <div class="text"><div class="title">Let Claude speak its own lines</div><div class="desc" id="liveDesc">Lines are sent to your voice provider, so Claude is told to keep code and secrets out of them.</div></div>
+          <div class="controls"><label class="switch"><input type="checkbox" data-k="live.enabled" aria-label="Let Claude speak its own lines"><span></span></label></div>
+        </div>
+        <div class="row">
+          <div class="text"><div class="title">Longest line</div><div class="desc">Longer lines are cut at a word.</div></div>
+          <div class="controls"><input class="field" type="number" min="40" max="400" data-k="live.max_chars" aria-label="Longest line in characters"><span class="unit">characters</span></div>
+        </div>
+        <div class="row">
+          <div class="text"><div class="title">Daily budget</div><div class="desc">The most Heads-up records on its own each day, per provider: Claude's lines, project names and alerts in new voices. Set 0 to record nothing new. What you record from this page isn't capped.</div></div>
+          <div class="controls"><input class="field" type="number" min="0" max="20000" data-k="live.daily_chars" aria-label="Daily budget in characters"><span class="unit">characters a day</span></div>
+        </div>
+        <div class="row">
+          <div class="text"><div class="title">Faster ElevenLabs model</div><div class="desc">Flash v2.5 answers quicker and uses half the credits per character. It sounds a little flatter.</div></div>
+          <div class="controls"><label class="switch"><input type="checkbox" data-k="live.fast" aria-label="Faster ElevenLabs model"><span></span></label></div>
+        </div>
+        <div class="row">
+          <div class="text"><div class="title">Try a line</div><div class="desc" id="sayDesc">Plays on your Mac in the current voice.</div></div>
+          <div class="controls">
+            <input class="field" id="sayText" placeholder="The build is green, and I'm ready for review." maxlength="400" aria-label="Line to speak">
+            <span class="count" id="sayCount"></span>
+            <button class="btn primary" id="sayBtn">Speak</button>
+          </div>
+        </div>
+      </div>
+      <h3>What it has cost</h3>
+      <div class="group" id="usage"></div>
     </section>
 
     <section>
@@ -519,7 +583,7 @@
 
     <section>
       <h2>Voice provider keys</h2>
-      <p class="lede">Only needed to record new lines, like project names. The built-in alerts work without a key. Keys go into your macOS Keychain and are never shown again.</p>
+      <p class="lede">Needed to record anything new: project names, your own wording, added voices and Claude's own lines. The built-in alerts work without a key. Keys go into your macOS Keychain and are never shown again.</p>
       <div class="group" id="keyList"></div>
     </section>
   </main>
@@ -552,8 +616,16 @@ const set = (o, path, v) => { const ks = path.split("."); const last = ks.pop();
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const label = (id) => LABELS[id] ?? id.replace(/_/g, " ");
-const textOf = (id) => S.templates.find((t) => t.id === id)?.text ?? "";
-const voiceName = (v) => { const i = S.voiceInfo[v]; return i ? i.accent + " " + i.gender.toLowerCase() : v.replace(/-/g, " "); };
+const original = (id) => S.templates.find((t) => t.id === id)?.text ?? "";
+const textOf = (id) => S.config.wording[id] ?? original(id);
+const infoOf = (v) => S.voiceInfo[v] ?? S.config.custom_voices.find((x) => x.id === v);
+const isCustom = (v) => !S.voiceInfo[v];
+const voiceName = (v) => { const i = infoOf(v); return !i ? v.replace(/-/g, " ") : isCustom(v) ? i.name : i.accent + " " + i.gender.toLowerCase(); };
+const PROVIDER = { elevenlabs: "ElevenLabs", sarvam: "Sarvam" };
+const num = (n) => Number(n || 0).toLocaleString();
+const X_SVG = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+const EDIT_SVG = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8.2 1.3l2.5 2.5-6.6 6.6H1.6V7.9z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+let lib = { open: false, provider: "elevenlabs", voices: {}, error: null, loading: false }, editing = null;
 
 function toast(msg) {
   const t = $("#toast");
@@ -617,9 +689,12 @@ function sweep() {
 
 async function play(id, voice) {
   try {
-    await loadWave(voice ?? S.config.voice, id);
-    await api("/api/test", voice ? { status: id, voice } : { status: id });
+    const needs = S.recordCost[voice ?? S.config.voice];
+    if (needs) toast("Recording with your key…");
+    const r = await api("/api/test", voice ? { status: id, voice } : { status: id });
+    await loadWave(voice ?? S.config.voice, id).catch(() => {});
     sweep();
+    if (r.note) toast("Played the built-in line: " + r.note);
     setTimeout(refresh, 800);
   } catch (e) { toast("Couldn't play: " + e.message); }
 }
@@ -663,7 +738,7 @@ function render() {
   $("#history").innerHTML = S.history.length
     ? S.history.map((h) => {
         const sub = [h.project, origin(h)].filter(Boolean).join(", ");
-        return `<li class="${h.result}"><time>${clock(h.t)}</time><span class="what">${esc(label(h.status))}${sub ? ` <span class="sub">${esc(sub)}</span>` : ""}</span>${h.reason ? `<span class="why">Skipped: ${esc(h.reason)}</span>` : ""}</li>`;
+        return `<li class="${h.result}"><time>${clock(h.t)}</time><span class="what">${esc(label(h.status))}${sub ? ` <span class="sub">${esc(sub)}</span>` : ""}</span>${h.message ? `<span class="why">“${esc(h.message)}”</span>` : ""}${h.reason ? `<span class="why">Skipped: ${esc(h.reason)}</span>` : ""}</li>`;
       }).join("")
     : '<p class="empty">Nothing yet. Alerts appear here as Claude sends them.</p>';
 
@@ -680,19 +755,45 @@ function render() {
       <span class="vtext"><span class="accent">${esc(i.accent ?? v)}</span><br><span class="meta">${esc(i.gender ?? "")}${i.speaker ? ", " + esc(i.speaker) : ""}</span></span>
       <button type="button" class="icon" data-preview="${esc(v)}" aria-label="Hear ${esc(voiceName(v))}">${PLAY_SVG}</button>
     </label>`;
-  }).join("");
+  }).join("") + c.custom_voices.map((v) => `<label class="voice ${v.id === c.voice ? "sel" : ""}">
+      <input type="radio" name="voice" value="${esc(v.id)}" ${v.id === c.voice ? "checked" : ""}>
+      <span class="vtext"><span class="accent">${esc(v.name)}</span><br><span class="meta">${esc([PROVIDER[v.provider], v.accent, v.gender].filter(Boolean).join(", "))}</span></span>
+      <button type="button" class="icon" data-preview="${esc(v.id)}" aria-label="Hear ${esc(v.name)}">${PLAY_SVG}</button>
+      <button type="button" class="icon remove" data-remove-voice="${esc(v.id)}" aria-label="Remove ${esc(v.name)}">${X_SVG}</button>
+    </label>`).join("") + `<button type="button" class="voice add" id="addVoice" aria-expanded="${lib.open}">Add a voice</button>`;
 
-  $("#alerts").innerHTML = GROUPS.map((g) => `
+  const cost = S.recordCost[c.voice] ?? 0, info = infoOf(c.voice) ?? {}, pname = PROVIDER[info.provider];
+  const edited = Object.keys(c.wording).length;
+  const note = !cost ? (isCustom(c.voice) ? `All alerts are recorded in ${esc(info.name)}.` : "")
+    : !S.keys[info.provider] ? `Add a ${pname} key below to record ${isCustom(c.voice) ? "alerts in " + esc(info.name) : "your edited lines"}. Until then you'll hear the built-in ${isCustom(c.voice) ? esc(voiceName(info.fallback)) + " voice" : "lines"}.`
+    : isCustom(c.voice) ? `Each alert is recorded in ${esc(info.name)} the first time it plays. Recording all of them now uses about ${num(cost)} ${pname} characters.`
+    : `${edited === 1 ? "Your edited line isn't" : "Some edited lines aren't"} recorded in this voice yet: about ${num(cost)} ${pname} characters.`;
+  $("#voiceNote").hidden = !note;
+  $("#voiceNote").innerHTML = note ? `<div class="row"><div class="text"><div class="desc">${note}</div></div>${cost && S.keys[info.provider] ? `<div class="controls"><button class="btn" id="recordAll">Record now</button></div>` : ""}</div>` : "";
+  renderLibrary();
+
+  if (!document.activeElement?.closest(".edit-row")) $("#alerts").innerHTML = GROUPS.map((g) => `
     <h3>${g.title}</h3>
     <div class="group">${g.ids.filter((id) => id in c.statuses).map((id) => `
       <div class="row ${c.statuses[id] ? "" : "off"}">
-        <div class="text"><div class="title">${esc(label(id))}</div><div class="desc">“${esc(textOf(id))}”</div></div>
+        <div class="text"><div class="title">${esc(label(id))}${c.wording[id] ? '<span class="tag">Edited</span>' : ""}</div><div class="desc">“${esc(textOf(id))}”</div></div>
         <div class="controls">
+          <button class="icon small" data-edit="${esc(id)}" aria-label="Change the words for ${esc(label(id))}">${EDIT_SVG}</button>
           <button class="icon" data-test="${esc(id)}" aria-label="Play ${esc(label(id))}">${PLAY_SVG}</button>
           <label class="switch"><input type="checkbox" data-k="statuses.${esc(id)}" ${c.statuses[id] ? "checked" : ""} aria-label="${esc(label(id))}"><span></span></label>
         </div>
-      </div>`).join("")}
+      </div>${editing === id ? `
+      <div class="row edit-row">
+        <input class="field" id="wordingText" value="${esc(textOf(id))}" maxlength="120" aria-label="Words for ${esc(label(id))}">
+        <div class="controls">
+          <span class="count" id="wordingCount"></span>
+          ${c.wording[id] ? `<button class="btn" data-wording-reset="${esc(id)}">Use original</button>` : ""}
+          <button class="btn" data-edit-cancel>Cancel</button>
+          <button class="btn primary" data-wording-save="${esc(id)}">Save and record</button>
+        </div>
+      </div>` : ""}`).join("")}
     </div>`).join("");
+  wordingCount();
 
   $("#hereRow").innerHTML = net
     ? (S.here.location
@@ -727,7 +828,7 @@ function render() {
   $("#camDesc").textContent = !m ? noCalls : m.camera ? "In use right now" : "Video calls and recordings";
   $("#focusDesc").textContent = !S.focusReadable ? noFocus : S.focus ? S.focus + " is on right now" : "Focus modes you switch on, and scheduled ones";
 
-  const provider = S.voiceInfo[c.voice]?.provider;
+  const provider = infoOf(c.voice)?.provider;
   const providerName = provider === "sarvam" ? "Sarvam" : "ElevenLabs";
   $("#namesDesc").textContent = S.keys[provider]
     ? "New names are recorded with your " + providerName + " key, about 20 characters each."
@@ -744,6 +845,18 @@ function render() {
       </div>`).join("")
     : '<div class="row"><div class="text"><div class="desc">Projects appear here after their first alert. Type a spelling to change how a name is said.</div></div></div>';
 
+  $("#liveDesc").textContent = !c.live.enabled ? "Off: Claude's lines are ignored and the regular alert plays."
+    : S.keys[provider] ? "Lines are recorded with your " + PROVIDER[provider] + " key and sent to " + PROVIDER[provider] + ", so Claude is told to keep code and secrets out of them."
+    : "Add a " + PROVIDER[provider] + " key below. Until then the regular alert plays.";
+  const u = S.usage, acct = S.account?.elevenlabs;
+  const both = (o) => ["elevenlabs", "sarvam"].filter((p) => o[p] || S.keys[p]).map((p) => num(o[p]) + " " + PROVIDER[p]).join(", ") || "Nothing yet";
+  const KIND = { live: "Claude's lines", names: "project names", wording: "your wording", voices: "new voices", test: "tests" };
+  const split = Object.entries(u.by).filter(([, n]) => n).map(([k, n]) => (KIND[k] ?? k) + " " + num(n)).join(", ");
+  $("#usage").innerHTML = `
+    <div class="row"><div class="text"><div class="title">Today</div><div class="desc">${split ? esc(split) : "Characters sent to your voice providers"}</div></div><div class="controls"><span class="val">${esc(both(u.today))}</span></div></div>
+    <div class="row"><div class="text"><div class="title">This month</div><div class="desc">Repeated lines are cached, so they're only paid for once.</div></div><div class="controls"><span class="val">${esc(both(u.month))}</span></div></div>
+    ${acct ? `<div class="row"><div class="text"><div class="title">ElevenLabs plan</div><div class="desc">Credits used across everything on your account${acct.resets ? ", resets " + new Date(acct.resets).toLocaleDateString([], { day: "numeric", month: "short" }) : ""}.</div></div><div class="controls"><span class="val">${num(acct.used)} of ${num(acct.limit)}</span></div></div>` : ""}`;
+
   const SOURCES = { env: "Using the key from your environment", keychain: "Saved in your Keychain", "shared keychain": "Using a key another app saved in your Keychain" };
   $("#keyList").innerHTML = [["elevenlabs", "ElevenLabs", "American, British and Australian voices"], ["sarvam", "Sarvam", "Indian voices"]].map(([id, name, use]) => `
     <div class="row">
@@ -751,12 +864,55 @@ function render() {
       <div class="controls">
         <input class="field" type="password" id="key-${id}" placeholder="${S.keys[id] ? "Replace key" : "Paste API key"}" autocomplete="off" spellcheck="false" aria-label="${name} API key">
         <button class="btn" data-savekey="${id}">Save</button>
+        ${S.keys[id] ? `<button class="btn" data-testkey="${id}">Test</button>` : ""}
         ${S.keys[id] === "keychain" ? `<button class="btn" data-delkey="${id}">Remove</button>` : ""}
       </div>
     </div>`).join("");
 
   if (wave.voice !== c.voice) loadWave(c.voice, wave.id).catch(() => {});
 }
+
+function renderLibrary() {
+  $("#library").hidden = !lib.open;
+  if (!lib.open) return;
+  document.querySelectorAll("[data-lib]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lib === lib.provider)));
+  const list = lib.voices[lib.provider], q = $("#libSearch").value.trim().toLowerCase();
+  const added = new Set(S.config.custom_voices.map((v) => v.provider + ":" + v.provider_id));
+  if (lib.provider === "elevenlabs" && !S.keys.elevenlabs) return ($("#libList").innerHTML = '<div class="row"><div class="text"><div class="desc">Add your ElevenLabs key below to see the voices in your account.</div></div></div>');
+  if (lib.error) return ($("#libList").innerHTML = `<div class="row"><div class="text"><div class="desc">Couldn't load voices: ${esc(lib.error)}</div></div></div>`);
+  if (!list) return ($("#libList").innerHTML = '<div class="row"><div class="text"><div class="desc">Loading voices…</div></div></div>');
+  const shown = list.filter((v) => !q || [v.name, v.accent, v.gender, v.about].join(" ").toLowerCase().includes(q)).slice(0, 80);
+  $("#libList").innerHTML = (shown.length ? shown.map((v) => `
+    <div class="row">
+      <div class="text"><div class="title">${esc(v.name)}</div><div class="desc">${esc([v.accent, v.gender, v.about].filter(Boolean).join(", ") || PROVIDER[v.provider])}</div></div>
+      <div class="controls">
+        ${v.preview ? `<button class="icon" data-lib-preview="${esc(v.preview)}" aria-label="Preview ${esc(v.name)} in the browser">${PLAY_SVG}</button>` : ""}
+        ${added.has(v.provider + ":" + v.provider_id) ? '<span class="unit">Added</span>' : `<button class="btn" data-lib-add="${esc(v.provider_id)}">Add</button>`}
+      </div>
+    </div>`).join("") : '<div class="row"><div class="text"><div class="desc">No voices match.</div></div></div>')
+    + `<div class="row"><div class="text"><div class="desc">${lib.provider === "elevenlabs"
+      ? "These are the voices in your ElevenLabs account. To use one from the ElevenLabs Voice Library, add it to My Voices on elevenlabs.io, then reopen this list. Previews play here in the browser and are free."
+      : "Sarvam voices speak Indian English. Add one, then press its play button to hear it on your Mac (about 30 characters)."}</div></div></div>`;
+}
+
+async function loadLibrary(provider) {
+  lib.provider = provider;
+  lib.error = null;
+  renderLibrary();
+  if (lib.voices[provider] || (provider === "elevenlabs" && !S.keys.elevenlabs)) return;
+  try { lib.voices[provider] = (await api("/api/library?provider=" + provider)).voices; }
+  catch (e) { lib.error = e.message; }
+  renderLibrary();
+}
+
+function wordingCount() {
+  const el = $("#wordingText");
+  if (!el) return;
+  const info = infoOf(S.config.voice) ?? {};
+  $("#wordingCount").textContent = el.value.trim().length + " characters" + (S.keys[info.provider] ? "" : ", needs a " + PROVIDER[info.provider] + " key");
+}
+
+let previewAudio = null;
 
 function fill(el) {
   el.style.setProperty("--fill", ((el.value - el.min) / (el.max - el.min)) * 100 + "%");
@@ -783,6 +939,14 @@ document.addEventListener("change", (e) => {
 });
 document.addEventListener("input", (e) => {
   if (e.target.type === "range") { fill(e.target); e.target.nextElementSibling.textContent = e.target.value + "%"; }
+  if (e.target.id === "libSearch") renderLibrary();
+  if (e.target.id === "wordingText") wordingCount();
+  if (e.target.id === "sayText") $("#sayCount").textContent = e.target.value.trim() ? e.target.value.trim().length + " characters" : "";
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.id === "wordingText") $("[data-wording-save]")?.click();
+  if (e.key === "Enter" && e.target.id === "sayText") $("#sayBtn").click();
+  if (e.key === "Escape" && e.target.id === "wordingText") { editing = null; render(); }
 });
 function setTheme(t) {
   if (t === "auto") delete document.documentElement.dataset.theme;
@@ -804,6 +968,62 @@ document.addEventListener("click", (e) => {
     return save(true);
   }
   if (b.dataset.test) return play(b.dataset.test);
+  if (b.id === "addVoice") { lib.open = !lib.open; render(); if (lib.open) { loadLibrary(lib.provider); $("#library").scrollIntoView({ behavior: "smooth", block: "nearest" }); } return; }
+  if (b.dataset.libClose !== undefined) { lib.open = false; previewAudio?.pause(); return render(); }
+  if (b.dataset.lib) return loadLibrary(b.dataset.lib);
+  if (b.dataset.libPreview) { previewAudio?.pause(); previewAudio = new Audio(b.dataset.libPreview); previewAudio.play().catch(() => toast("Couldn't play the preview")); return; }
+  if (b.dataset.libAdd) {
+    const v = lib.voices[lib.provider].find((x) => x.provider_id === b.dataset.libAdd);
+    api("/api/voices/add", v).then((s) => { S = s; render(); toast(v.name + " added and selected"); }).catch((err) => toast(err.message));
+    return;
+  }
+  if (b.dataset.removeVoice) {
+    e.preventDefault();
+    api("/api/voices/remove", { id: b.dataset.removeVoice }).then((s) => { S = s; render(); toast("Voice removed"); }).catch((err) => toast(err.message));
+    return;
+  }
+  if (b.id === "recordAll") {
+    b.disabled = true;
+    b.textContent = "Recording…";
+    api("/api/voices/record", { voice: S.config.voice })
+      .then((r) => { S = r.state; render(); toast(r.note ? "Stopped: " + r.note : "Recorded, " + num(r.spent) + " characters"); })
+      .catch((err) => { toast(err.message); render(); });
+    return;
+  }
+  if (b.dataset.edit) { editing = editing === b.dataset.edit ? null : b.dataset.edit; render(); $("#wordingText")?.focus(); return; }
+  if (b.dataset.editCancel !== undefined) { editing = null; return render(); }
+  if (b.dataset.wordingSave || b.dataset.wordingReset) {
+    const id = b.dataset.wordingSave || b.dataset.wordingReset;
+    const text = b.dataset.wordingSave ? $("#wordingText").value.trim() : "";
+    if (b.dataset.wordingSave && text === original(id)) { editing = null; return render(); }
+    b.disabled = true;
+    if (text) b.textContent = "Recording…";
+    api("/api/wording", { id, text })
+      .then((r) => {
+        S = r.state; editing = null; render();
+        toast(!text ? "Back to the original words" : r.note ? "Saved. Not recorded yet: " + r.note : "Saved and recorded, " + num(r.spent) + " characters");
+        if (text && !r.note) play(id);
+      })
+      .catch((err) => { toast(err.message); b.disabled = false; });
+    return;
+  }
+  if (b.id === "sayBtn") {
+    const text = $("#sayText").value.trim();
+    if (!text) return toast("Type a line first");
+    b.disabled = true;
+    api("/api/test", { status: "completed", message: text })
+      .then((r) => { toast(r.live ? "Playing: " + r.line : "Played the built-in line: " + (r.note ?? "couldn't record")); setTimeout(refresh, 800); })
+      .catch((err) => toast("Couldn't play: " + err.message))
+      .finally(() => { b.disabled = false; });
+    return;
+  }
+  if (b.dataset.testkey) {
+    b.disabled = true;
+    api("/api/key/test", { provider: b.dataset.testkey })
+      .then((r) => { S = r.state; render(); toast("Your " + PROVIDER[b.dataset.testkey] + " key works"); })
+      .catch((err) => { toast(err.message); b.disabled = false; });
+    return;
+  }
   if (b.dataset.testProject) {
     (async () => {
       try {
