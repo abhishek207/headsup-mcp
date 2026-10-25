@@ -11,7 +11,7 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 | `skills/heads-up/SKILL.md` | Teaches the agent when/how to call `notify_user`. Replaces the old CLAUDE.md section. Provider-neutral wording. |
 | `hooks/hooks.json`, `hooks/codex.json` | Plugin hooks → `hook.mjs`. Codex has `PermissionRequest` instead of `Notification`. |
 | `paths.mjs` | `ROOT` (code + built-in voices; the plugin cache copy when installed), `DATA` (`~/Library/Application Support/heads-up` or `$HEADS_UP_HOME`), `HELPER` (call detector, `DATA/bin` first). Writes `DATA/root` so the `headsup` shim finds the current copy. |
-| `core.mjs` | Config defaults + `normalize()` (all clamping/validation), guardrails (`blockedReason`), detectors (location, idle, microphone, Focus), project names, volume safety, playback queue, `prepare()` (which clip and words, with fallbacks), `alert()`. |
+| `core.mjs` | Config defaults + `normalize()` (all clamping/validation), guardrails (`blockedReason`), detectors (location, idle, mic/camera, Focus), project names, volume safety, playback queue, `prepare()` (which clip and words, with fallbacks), `alert()`. |
 | `speech.mjs` | Recording beyond the built-in clips: `compose()` (greeting + 0.6 s + message, cached), `cleanMessage()`, daily budget, usage log (`DATA/usage.json`), library-voice lookup. |
 | `tts.mjs` | ElevenLabs/Sarvam synthesis with the user's own key (env → Keychain), voice lists (ElevenLabs account, Sarvam speakers), key check, plan usage, Keychain save/delete via `security -i`, ffmpeg join/extract. Also widens `PATH` for MCP/hook processes. |
 | `server.mjs` | MCP stdio server (hand-rolled JSON-RPC, async replies). One tool: `notify_user { status, message?, repeat?, volume? }`. Project = `projectFor(process.cwd())`. Waits up to 15 s for a live line so the answer says what was spoken. |
@@ -25,7 +25,7 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 | `voices/<voice>/<id>.mp3` | 140 built-in clips ("Hello." + 0.6 s + message, −16 LUFS mono). |
 | `tools/generate.mjs` | Rebuilds clips; caches raw segments in `DATA/segments` keyed by text hash so only changed text costs credits. `--dry-run` first, always. |
 | `test/*.test.mjs` | `npm test` (node:test, no deps): config clamps, guardrail order, Focus parsing, detector warnings, play lock, MCP server, hooks, live lines/wording/library voices/budget (fake TTS), installer edits. Runs in a temp `HEADS_UP_HOME`, never plays audio, never reads real keys. |
-| `tools/media-in-use.swift` | Builds `bin/media-in-use` (`npm run build`): prints `{"mic":bool}` without opening devices. Never add camera checks: enumerating CoreMediaIO devices wakes a nearby iPhone via Continuity Camera. |
+| `tools/media-in-use.swift` | Builds `bin/media-in-use` (`npm run build`): prints `{"mic":bool,"camera":bool}` without opening devices. |
 
 ## Rules
 
@@ -37,7 +37,7 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 - Playback goes through `withPlayLock` (`DATA/playing.lock`): one alert at a time across all sessions, and the volume to restore is saved in the lock so a crash can't leave the Mac loud.
 - A detector that can't see (helper not built, Focus file unreadable) must be reported by `detectorProblems()`, never silently treated as "not on a call".
 - A skipped alert is not an error: the tool returns "Not played: <reason>" and Claude must not retry.
-- Guardrail order in `blockedReason`: env kill switch → master switch → mute → per-alert switch → quiet hours → location lock → Focus → microphone → away (idle) → cooldown → hourly limit. `force` (tests) skips guardrails but never volume caps.
+- Guardrail order in `blockedReason`: env kill switch → master switch → mute → per-alert switch → quiet hours → location lock → Focus → mic/camera → away (idle) → cooldown → hourly limit. `force` (tests) skips guardrails but never volume caps.
 - Live speech, edited wording, library voices and project names all go through `prepare()` → `compose()`: guardrails and volume caps apply as for any alert, automatic recording respects `live.daily_chars`, and every failure falls back to a built-in clip with a `note` (never an error).
 - Spending: generating audio costs the user's credits. Dry-run, state the character count, and get a go-ahead before any batch. Project names are capped at 20 new names per day.
 - Keep the page's design language: liquid glass on an indigo/violet/cyan gradient, SF Pro (system font), one accent gradient for "on", amber only for "silent now", sentence case, no all-caps labels.
