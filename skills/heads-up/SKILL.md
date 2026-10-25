@@ -40,13 +40,16 @@ Pick the one that says why you stopped. The tool's description lists all twenty 
 
 Use `repeat: 2` only when it's urgent. Leave `volume` out; it's handled within the user's safety caps.
 
-## Saying more with `message`
+## Saying what you need with `message`
 
-When the fixed line doesn't say enough, add `message`: your own short line, spoken instead of the status's line.
+The user may have several sessions running at once, and "I need your review" alone doesn't tell them which one to open. Pass `message` on every call: your own short line, spoken instead of the status's line, that names the thread or task and exactly what you need (which review, which decision and its options, which input).
 
-- One or two plain sentences, first person: "The migration ran, but two tables need your review."
-- No code, file paths, links, numbers that need reading, or anything secret. The text goes to the user's text-to-speech provider.
-- Still set the closest `status`. Spoken lines are an opt-in feature that needs the user's own ElevenLabs or Sarvam key; without it, the status's built-in line plays instead.
+- One or two plain sentences, first person: "The pricing page task is done. I need you to pick hero image A or B." or "In the webhooks thread, I need to know whether refunds can wait a day."
+- Name the thread or session by its title, or the task in a few words the user would recognise.
+- Don't repeat the project name: with spoken project names on, the greeting already says it ("Hello from Kosh.").
+- Keep it under about 120 characters; longer lines are cut at 160.
+- No names, code, file paths, ids, links, numbers that need reading, or anything secret. The text goes to the user's text-to-speech provider.
+- Still set the closest `status`. Spoken lines are an opt-in feature that needs the user's own ElevenLabs or Sarvam key; when they're off, or the day's budget is used up, the status's built-in line plays instead.
 
 ## Reading the answer
 
