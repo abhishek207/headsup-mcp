@@ -4,11 +4,11 @@
   "version": "1.5.0",
   "description": "Spoken voice alerts on your Mac when your coding agent finishes a task or needs you.",
   "author": {
-    "name": "Abhishek",
+    "name": "Brand Bakery",
     "url": "https://github.com/abhishek207"
   },
   "repository": "https://github.com/abhishek207/headsup-mcp",
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-only",
   "keywords": [
     "voice",
     "alerts",

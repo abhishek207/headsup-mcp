@@ -19,9 +19,9 @@
     "url": "git+https://github.com/abhishek207/headsup-mcp.git"
   },
   "homepage": "https://github.com/abhishek207/headsup-mcp#readme",
-  "author": "Abhishek (https://github.com/abhishek207)",
+  "author": "Brand Bakery",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-only",
   "os": [
     "darwin"
   ],
@@ -53,6 +53,13 @@
     "settings.html",
     "templates.json",
     "voices.json",
-    "README.md"
-  ]
+    "README.md",
+    "LICENSE"
+  ],
+  "contributors": [
+    "Abhishek (https://github.com/abhishek207)"
+  ],
+  "bugs": {
+    "url": "https://github.com/abhishek207/headsup-mcp/issues"
+  }
 }

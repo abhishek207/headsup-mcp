@@ -18,7 +18,7 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 - **Automatic alerts** via Claude Code hooks: permission prompts, and turns that run longer than 2 minutes, even if Claude forgets to call the tool. Background sessions (`claude -p`, SDK workers) never trigger them.
 - **Polite by default**
   - Away detection: silent if you used the keyboard or mouse in the last 60 seconds.
-  - Calls and Focus: silent while a mic or camera is in use, or a macOS Focus is on.
+  - Calls and Focus: silent while a microphone is in use, or a macOS Focus is on.
   - Locations: optionally only play on saved networks (Home, office), recognised by the router's hardware address. No GPS.
   - Quiet hours, a gap between alerts, and an hourly limit.
 - **Ear-safe volume**: if your Mac is muted or quiet, an alert briefly turns it up, then restores it. AirPods and headphones never go above 50%; speakers never above 90%.
@@ -27,7 +27,7 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 ## Requirements
 
 - macOS, Node.js 20+, Claude Code (or Codex)
-- Xcode Command Line Tools (`swiftc`) to build the mic/camera checker
+- Xcode Command Line Tools (`swiftc`) to build the microphone checker
 - `ffmpeg` (Homebrew) for anything recorded with your key
 - Optional: an ElevenLabs and/or Sarvam API key, only for recording new lines
 
@@ -96,7 +96,28 @@ Claude's lines are sent to your provider to be spoken, so Claude is told to keep
 - `hook.log` in the data folder has one line per hook decision and why.
 - The settings page's "Recent alerts" shows every alert, played or skipped, with the reason.
 - `HEADS_UP_DISABLED=1` silences everything for one process (handy for tests).
+- Codex doesn't tell hooks whether a session is interactive, so a long `codex exec` run also announces when it finishes. Claude Code's background runs (`claude -p`, SDK) are ignored.
+- Codex in full-auto ("YOLO") mode never asks for approval, so the approval alert never fires there.
 
 ## Voices and credits
 
-The built-in English clips were made with [ElevenLabs](https://elevenlabs.io) (elevenlabs.io): voices Brian, Sarah, George, Alice and Charlie. The Indian English clips were made with [Sarvam AI](https://www.sarvam.ai) Bulbul v3: voices Aditya and Priya. Lines you record with your own key are made under your own account and your provider's terms.
+Voices powered by [ElevenLabs](https://elevenlabs.io) (elevenlabs.io) and [Sarvam AI](https://www.sarvam.ai).
+
+- English clips: ElevenLabs voices Brian, Sarah, George, Alice and Charlie, made on the ElevenLabs free plan. Credit: elevenlabs.io. Non-commercial use only.
+- Indian English clips: Sarvam Bulbul v3 voices Aditya and Priya.
+
+Lines you record with your own key are made under your own account and your provider's terms.
+
+## Contributing
+
+Use it, fork it, change it. Outside pull requests aren't accepted and are closed automatically; bug reports are welcome as issues. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Copyright (C) 2026 Brand Bakery.
+
+The code is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0-only): use, change and share it freely; if you distribute a modified version, it must stay under the GPL with its source available. The built-in clips in `voices/` aren't covered by it; see [voices/NOTICE.md](voices/NOTICE.md).
+
+---
+
+Built and maintained by **Brand Bakery**.

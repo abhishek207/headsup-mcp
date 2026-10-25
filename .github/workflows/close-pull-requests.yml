@@ -1,0 +1,18 @@
+# Heads-up doesn't take outside pull requests (see CONTRIBUTING.md); close them politely.
+# pull_request_target runs with the base repo's token but never checks out the PR's code.
+name: Close outside pull requests
+on:
+  pull_request_target:
+    types: [opened, reopened]
+permissions:
+  pull-requests: write
+jobs:
+  close:
+    if: github.event.pull_request.user.login != github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr close "$PR" --comment "Thanks for taking the time. Heads-up isn't accepting outside pull requests, so this one is closed without review. You're welcome to fork it and change it freely under its license, and bug reports are welcome as issues. See CONTRIBUTING.md."
