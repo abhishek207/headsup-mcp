@@ -1,0 +1,33 @@
+{
+  "name": "heads-up",
+  "version": "1.5.0",
+  "description": "Spoken voice alerts on your Mac when your coding agent finishes a task or needs you.",
+  "author": {
+    "name": "Abhishek",
+    "url": "https://github.com/abhishek207"
+  },
+  "repository": "https://github.com/abhishek207/headsup-mcp",
+  "license": "UNLICENSED",
+  "keywords": [
+    "voice",
+    "alerts",
+    "notifications",
+    "macos",
+    "tts"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.codex-plugin/mcp.json",
+  "hooks": "./hooks/codex.json",
+  "interface": {
+    "displayName": "Heads-up",
+    "shortDescription": "Hear when your agent needs you",
+    "longDescription": "Plays a short spoken line on your Mac (\"Hello. I need your review.\") when a task finishes or the agent needs an approval, input or a review. Stays quiet on calls, in Focus, when you're away or outside your quiet hours.",
+    "developerName": "Abhishek",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": "Tell me out loud when you're done.",
+    "logo": "./assets/logo.svg"
+  }
+}

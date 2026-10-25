@@ -1,0 +1,27 @@
+{
+  "name": "heads-up",
+  "displayName": "Heads-up",
+  "version": "1.5.0",
+  "description": "Spoken voice alerts on your Mac when your coding agent finishes a task or needs you.",
+  "author": {
+    "name": "Abhishek",
+    "url": "https://github.com/abhishek207"
+  },
+  "repository": "https://github.com/abhishek207/headsup-mcp",
+  "license": "UNLICENSED",
+  "keywords": [
+    "voice",
+    "alerts",
+    "notifications",
+    "macos",
+    "tts"
+  ],
+  "mcpServers": {
+    "heads-up": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/server.mjs"
+      ]
+    }
+  }
+}

@@ -77,3 +77,12 @@ test("hook: permission prompt alerts approval", async () => {
   hook({ hook_event_name: "Notification", notification_type: "permission_prompt", message: "Claude needs your permission" });
   assert.equal((await nextAlert(before)).status, "approval");
 });
+
+test("hook: Codex's approval request alerts approval and leaves the decision to Codex", async () => {
+  const before = historyLength();
+  const r = hook({ hook_event_name: "PermissionRequest", tool_name: "Bash" });
+  assert.equal(r.stdout, "", "no decision printed, so Codex still asks the user");
+  const a = await nextAlert(before);
+  assert.equal(a.status, "approval");
+  assert.equal(a.source, "hook:PermissionRequest");
+});

@@ -1,0 +1,11 @@
+{
+  "name": "heads-up",
+  "owner": { "name": "Abhishek" },
+  "plugins": [
+    {
+      "name": "heads-up",
+      "source": "./",
+      "description": "Spoken voice alerts on your Mac when your coding agent finishes a task or needs you."
+    }
+  ]
+}

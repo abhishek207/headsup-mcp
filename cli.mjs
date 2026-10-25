@@ -7,7 +7,7 @@
 //   headsup test [id]    play an alert now, ignoring guardrails
 //   headsup say <words>  speak your own line now with your key (like Claude's messages)
 //   headsup usage        characters sent to your voice providers
-//   headsup install      set up Claude Code (MCP, hooks, command); uninstall to undo
+//   headsup install      install the plugin in Claude Code (and Codex); uninstall to undo
 
 import { spawn, execFileSync } from "node:child_process";
 import { join } from "node:path";

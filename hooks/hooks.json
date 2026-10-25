@@ -1,0 +1,17 @@
+{
+  "description": "Heads-up alerts that don't depend on the model remembering: permission prompts and long turns.",
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hook.mjs\"", "async": true, "timeout": 15 }] }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|idle_prompt|elicitation_dialog|elicitation_url_dialog|agent_needs_input",
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hook.mjs\"", "async": true, "timeout": 15 }]
+      }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hook.mjs\"", "async": true, "timeout": 15 }] }
+    ]
+  }
+}

@@ -1,20 +1,24 @@
 # Heads-up: working notes for Claude
 
-Local macOS MCP server + Claude Code hooks that speak short alerts ("Hello from Kosh. I need your review."). Zero npm dependencies, plain Node ESM, one small Swift helper. Full background and history: `docs/PROJECT_SUMMARY.md`.
+Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak short alerts ("Hello from Kosh. I need your review."). Zero npm dependencies, plain Node ESM, one small Swift helper. Full background and history: `docs/PROJECT_SUMMARY.md`.
 
 ## Map
 
 | File | Role |
 |---|---|
-| `paths.mjs` | `ROOT` (this repo: code + built-in voices) and `DATA` (`~/Library/Application Support/heads-up` or `$HEADS_UP_HOME`: config, log, caches). |
+| `.claude-plugin/` | `plugin.json` (Claude Code manifest, MCP server inline) and `marketplace.json` (this repo is its own marketplace, plugin source `./`). |
+| `.codex-plugin/` | Codex manifest + `mcp.json`. Kept out of the repo root so Claude Code doesn't load it as a project `.mcp.json`. |
+| `skills/heads-up/SKILL.md` | Teaches the agent when/how to call `notify_user`. Replaces the old CLAUDE.md section. Provider-neutral wording. |
+| `hooks/hooks.json`, `hooks/codex.json` | Plugin hooks → `hook.mjs`. Codex has `PermissionRequest` instead of `Notification`. |
+| `paths.mjs` | `ROOT` (code + built-in voices; the plugin cache copy when installed), `DATA` (`~/Library/Application Support/heads-up` or `$HEADS_UP_HOME`), `HELPER` (call detector, `DATA/bin` first). Writes `DATA/root` so the `headsup` shim finds the current copy. |
 | `core.mjs` | Config defaults + `normalize()` (all clamping/validation), guardrails (`blockedReason`), detectors (location, idle, mic/camera, Focus), project names, volume safety, playback queue, `prepare()` (which clip and words, with fallbacks), `alert()`. |
 | `speech.mjs` | Recording beyond the built-in clips: `compose()` (greeting + 0.6 s + message, cached), `cleanMessage()`, daily budget, usage log (`DATA/usage.json`), library-voice lookup. |
 | `tts.mjs` | ElevenLabs/Sarvam synthesis with the user's own key (env → Keychain), voice lists (ElevenLabs account, Sarvam speakers), key check, plan usage, Keychain save/delete via `security -i`, ffmpeg join/extract. Also widens `PATH` for MCP/hook processes. |
 | `server.mjs` | MCP stdio server (hand-rolled JSON-RPC, async replies). One tool: `notify_user { status, message?, repeat?, volume? }`. Project = `projectFor(process.cwd())`. Waits up to 15 s for a live line so the answer says what was spoken. |
-| `hook.mjs` | Claude Code hook entry: UserPromptSubmit (turn start), Notification (permission → `approval`), Stop (long turn → `completed`/`input`). Ignores background sessions. Plays in a detached child. Logs to `DATA/hook.log`. |
+| `hook.mjs` | Hook entry (Claude Code + Codex): UserPromptSubmit (turn start), Notification / PermissionRequest (→ `approval`), Stop (long turn → `completed`/`input`). Ignores background sessions. Plays in a detached child. Logs to `DATA/hook.log`. |
 | `settings.mjs` + `settings.html` | Local settings page on 127.0.0.1:4777 (host/origin checks, JSON-only POSTs). HTML is re-read per request. |
 | `cli.mjs` | `headsup` command: settings, on/off, mute/unmute, status, test, say, usage, install/uninstall. |
-| `tools/install.mjs` | `npm run setup`: helper build, MCP registration, allow rule + hooks in `~/.claude/settings.json`, CLI link, CLAUDE.md section. Idempotent; `--dry-run`, `--uninstall`. Pure settings edits are exported for tests. |
+| `tools/install.mjs` | `headsup install` / `npm run setup` / `npx github:abhishek207/headsup-mcp install`: call detector into `DATA/bin`, marketplace add + plugin install (Claude Code, Codex), allow rule, removes pre-plugin setup, `headsup` shim. Idempotent; `--dry-run`, `--uninstall`, `--source`. |
 | `assets/logo.svg` | Logo ("ping"), served as the page's favicon and header mark. |
 | `templates.json` | Greeting + the 20 alerts (`id`, `text`, `when`). `when` feeds the MCP tool description. |
 | `voices.json` | The 7 voices: accent, gender, speaker, provider, provider voice id. |
@@ -27,6 +31,7 @@ Local macOS MCP server + Claude Code hooks that speak short alerts ("Hello from 
 
 - Never write API keys to config, logs or the page. Keys come from env or Keychain only (`tts.mjs`).
 - User data goes in `DATA`, never in the repo. `.gitignore` backs this up.
+- Project names and live lines are off by default and stay off without a provider key (`settings.mjs` enforces it).
 - Config is re-read on every call; every new field needs a default in `DEFAULTS` and a clamp/validation in `normalize()`.
 - Volume must stay under `HARD_CAP` (speakers 90, headphones 50). Unknown output device = headphone limits.
 - Playback goes through `withPlayLock` (`DATA/playing.lock`): one alert at a time across all sessions, and the volume to restore is saved in the lock so a crash can't leave the Mac loud.

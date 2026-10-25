@@ -84,6 +84,12 @@ function projects(c) {
   }));
 }
 
+// Project names and the model's own lines need a provider key: without one they stay off,
+// whatever the page sends, and deleting the last key switches them off again.
+const anyKey = () => PROVIDERS.some((p) => keySource(p));
+const keyFeaturesOff = (c) => ({ ...c, project_names: { ...c.project_names, enabled: false }, live: { ...c.live, enabled: false } });
+const withKeyGate = (c) => (anyKey() ? c : keyFeaturesOff(c));
+
 const readBody = (req) =>
   new Promise((resolve, reject) => {
     let data = "";
@@ -147,7 +153,7 @@ const server = createServer(async (req, res) => {
       return createReadStream(file).pipe(res);
     }
     if (req.method === "POST" && url.pathname === "/api/config") {
-      saveConfig(await readBody(req));
+      saveConfig(withKeyGate(await readBody(req)));
       return json(200, await state());
     }
     if (req.method === "POST" && url.pathname === "/api/test") {
@@ -236,6 +242,7 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/key/delete") {
       deleteKey((await readBody(req)).provider);
+      if (!anyKey()) saveConfig(keyFeaturesOff(loadConfig()));
       await elevenAccount(true);
       return json(200, await state());
     }

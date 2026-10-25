@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Claude Code hook entry for heads-up, so key alerts don't depend on
-// Claude remembering to call notify_user. Registered in ~/.claude/settings.json:
-//   UserPromptSubmit  note when the turn started
-//   Notification      permission prompt -> "approval"; idle -> "reminder" (off by default)
-//   Stop              turn ran longer than hooks.long_turn_seconds -> "completed" (or "input")
+// Hook entry for heads-up (Claude Code and Codex), so key alerts don't depend on
+// the model remembering to call notify_user. Registered by the plugin (hooks/):
+//   UserPromptSubmit   note when the turn started
+//   Notification       Claude Code: permission prompt -> "approval"; idle -> "reminder" (off by default)
+//   PermissionRequest  Codex: about to ask for approval -> "approval" (prints nothing, so Codex still asks)
+//   Stop               turn ran longer than hooks.long_turn_seconds -> "completed" (or "input")
 // Background sessions (claude -p, SDK workers) are ignored. Playback runs in a
 // detached child so the hook returns at once.
 
@@ -94,6 +95,10 @@ if (event === "UserPromptSubmit") {
 } else if (event === "Notification") {
   const id = notificationAlert(input);
   log(`${tag} type=${input.notification_type ?? "-"} -> ${id ?? "no alert"}`);
+  if (id) play(id);
+} else if (event === "PermissionRequest") {
+  const id = c.hooks.permission ? "approval" : null;
+  log(`${tag} tool=${input.tool_name ?? "-"} -> ${id ?? "no alert"}`);
   if (id) play(id);
 } else if (event === "Stop") {
   const turns = readTurns();

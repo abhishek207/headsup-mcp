@@ -1,4 +1,4 @@
-import { DATA, quiet } from "./helpers.mjs";
+import { DATA, optedIn, quiet } from "./helpers.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -51,7 +51,7 @@ test("normalize: wording, library voices and live settings", () => {
   assert.equal(c.custom_voices.length, 1);
   assert.deepEqual(c.custom_voices[0], { id: "el-abc123", provider: "elevenlabs", provider_id: "abc123", name: "Rachelscript", accent: "", gender: "", fallback: "british-male" });
   assert.equal(c.voice, "el-abc123", "a library voice can be selected");
-  assert.deepEqual(c.live, { enabled: true, max_chars: 400, daily_chars: 0, fast: false });
+  assert.deepEqual(c.live, { enabled: false, max_chars: 400, daily_chars: 0, fast: false });
   assert.equal(normalize({ voice: "el-gone" }).voice, "american-male", "a removed library voice falls back");
   assert.equal(textFor("review", c), "Come and look.");
 });
@@ -66,7 +66,7 @@ test("built-in alerts need no key and no recording", async () => {
 
 test("Claude's own line: recorded once, cached, counted", needsFfmpeg, () =>
   withTts(async () => {
-    const c = normalize(quiet);
+    const c = normalize(optedIn);
     const before = spent();
     const msg = "The migration ran, but two tables need your review.";
     const p = await prepare("american-male", "review", { message: msg }, c);
@@ -83,7 +83,7 @@ test("Claude's own line: recorded once, cached, counted", needsFfmpeg, () =>
 test("Claude's own line falls back to the alert when it can't be recorded", async () => {
   noKeys();
   const msg = "Two tables need your review.";
-  let p = await prepare("american-male", "review", { message: msg }, normalize(quiet));
+  let p = await prepare("american-male", "review", { message: msg }, normalize(optedIn));
   assert.equal(p.live, false);
   assert.equal(p.line, "Hello. I need your review.");
   assert.equal(p.note, "no ElevenLabs key");
@@ -92,7 +92,7 @@ test("Claude's own line falls back to the alert when it can't be recorded", asyn
   assert.equal(p.note, "live messages are switched off");
 
   await withTts(async () => {
-    p = await prepare("american-male", "review", { message: "x".repeat(30) + " more words here" }, normalize({ ...quiet, live: { daily_chars: 10 } }));
+    p = await prepare("american-male", "review", { message: "x".repeat(30) + " more words here" }, normalize({ ...quiet, live: { enabled: true, daily_chars: 10 } }));
     assert.equal(p.live, false);
     assert.match(p.note, /budget of 10 characters/);
   });
@@ -139,13 +139,21 @@ test("library voice: costed, recorded on demand, falls back to its built-in voic
 
 test("project names: recorded once per voice", needsFfmpeg, () =>
   withTts(async () => {
-    const c = normalize(quiet);
+    const c = normalize(optedIn);
     const p = await prepare("american-male", "review", { project: "brand-bakery-hub" }, c);
     assert.equal(p.line, "Hello from Brand Bakery Hub. I need your review.");
     assert.equal(core.nameRecorded("american-male", "brand-bakery-hub", c), true);
-    const muted = normalize({ ...quiet, project_names: { muted: ["brand-bakery-hub"] } });
+    const muted = normalize({ ...quiet, project_names: { enabled: true, muted: ["brand-bakery-hub"] } });
     assert.equal((await prepare("american-male", "review", { project: "brand-bakery-hub" }, muted)).line, "Hello. I need your review.");
   }));
+
+test("out of the box: no project names and no own lines, only the built-in clip", async () => {
+  noKeys();
+  const p = await prepare("american-male", "review", { project: "brand-bakery-hub", message: "Two tables need your review." }, normalize(quiet));
+  assert.match(p.file, /voices\/american-male\/review\.mp3$/);
+  assert.equal(p.line, "Hello. I need your review.");
+  assert.equal(p.note, "live messages are switched off");
+});
 
 test("alert records Claude's message and reports what will play", async () => {
   noKeys();

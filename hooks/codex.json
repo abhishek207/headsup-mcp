@@ -1,0 +1,14 @@
+{
+  "description": "Heads-up alerts that don't depend on the model remembering: approval requests and long turns.",
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "node \"$PLUGIN_ROOT/hook.mjs\"", "timeout": 15 }] }
+    ],
+    "PermissionRequest": [
+      { "hooks": [{ "type": "command", "command": "node \"$PLUGIN_ROOT/hook.mjs\"", "timeout": 15 }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "node \"$PLUGIN_ROOT/hook.mjs\"", "timeout": 15 }] }
+    ]
+  }
+}

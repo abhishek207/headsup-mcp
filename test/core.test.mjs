@@ -127,7 +127,7 @@ test("detector problems are reported, not hidden", () => {
   const on = normalize({});
   assert.deepEqual(detectorProblems(on, { media: { mic: false, camera: false }, helper: true, focus: true }), []);
   const [notBuilt, noFocus] = detectorProblems(on, { media: null, helper: false, focus: false });
-  assert.match(notBuilt, /npm run build/);
+  assert.match(notBuilt, /headsup install/);
   assert.match(noFocus, /Focus detection/);
   assert.match(detectorProblems(on, { media: null, helper: true, focus: true })[0], /didn't answer/);
   assert.deepEqual(detectorProblems(normalize(quiet), { media: null, helper: false, focus: false }), [], "switched-off detectors don't warn");

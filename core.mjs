@@ -8,7 +8,7 @@ import { existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, wr
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { DATA, ROOT } from "./paths.mjs";
+import { DATA, HELPER as MEDIA_HELPER, ROOT } from "./paths.mjs";
 import { Skip, cleanMessage, compose, costOf, voiceInfo } from "./speech.mjs";
 import { PROVIDERS, cachedSegment, segKey } from "./tts.mjs";
 
@@ -43,8 +43,8 @@ export const DEFAULTS = {
   away: { enabled: true, idle_seconds: 60 },
   // Stay silent while a mic or camera is in use (calls) or a Focus is on.
   calls: { mic: true, camera: true, focus: true },
-  // "Hello from <project>." instead of "Hello." Needs the user's own TTS key.
-  project_names: { enabled: true, aliases: {}, muted: [] },
+  // "Hello from <project>." instead of "Hello." Opt-in: needs the user's own TTS key.
+  project_names: { enabled: false, aliases: {}, muted: [] },
   // Claude Code hooks (hook.mjs): alerts that don't depend on Claude remembering.
   hooks: { permission: true, long_turn: true, long_turn_seconds: 120, idle_reminder: false },
   volume: {
@@ -56,9 +56,9 @@ export const DEFAULTS = {
   wording: {},
   // Voices added from the user's ElevenLabs account or Sarvam's speakers (see normalize for the shape).
   custom_voices: [],
-  // Claude's own lines (notify_user's message), spoken with the user's key.
+  // Claude's own lines (notify_user's message), spoken with the user's key. Opt-in, like project names.
   // daily_chars caps everything recorded automatically per provider per day (0 = nothing new).
-  live: { enabled: true, max_chars: 160, daily_chars: 1000, fast: false },
+  live: { enabled: false, max_chars: 160, daily_chars: 1000, fast: false },
 };
 
 const LIMITS = { wording_chars: 120, custom_voices: 30 };
@@ -129,7 +129,7 @@ export function normalize(c = {}) {
       focus: c.calls?.focus !== false,
     },
     project_names: {
-      enabled: c.project_names?.enabled !== false,
+      enabled: c.project_names?.enabled === true,
       aliases: Object.fromEntries(
         Object.entries(c.project_names?.aliases ?? {})
           .map(([k, v]) => [String(k).slice(0, 80), String(v).replace(/[^\p{L}\p{N} .'&-]/gu, "").trim().slice(0, 40)])
@@ -156,7 +156,7 @@ export function normalize(c = {}) {
     ),
     custom_voices,
     live: {
-      enabled: c.live?.enabled !== false,
+      enabled: c.live?.enabled === true,
       max_chars: clamp(c.live?.max_chars, 40, 400, d.live.max_chars),
       daily_chars: clamp(c.live?.daily_chars, 0, 20000, d.live.daily_chars),
       fast: c.live?.fast === true,
@@ -260,8 +260,7 @@ export function idleSeconds() {
 }
 
 // Whether any app is using a microphone or camera ({ mic, camera }), or null if unknown.
-// bin/media-in-use only reads device state, so it never lights the privacy indicator.
-const MEDIA_HELPER = join(ROOT, "bin", "media-in-use");
+// The helper (media-in-use) only reads device state, so it never lights the privacy indicator.
 
 export function mediaInUse() {
   try {
@@ -288,8 +287,8 @@ export function detectorProblems(c = loadConfig(), probe = probeDetectors()) {
   const problems = [];
   if ((c.calls.mic || c.calls.camera) && !probe.media) {
     problems.push(probe.helper
-      ? "Call detection isn't working: bin/media-in-use didn't answer."
-      : "Call detection is off: the mic and camera checker isn't built. Run npm run build.");
+      ? "Call detection isn't working: media-in-use didn't answer."
+      : "Call detection is off: the mic and camera checker isn't built. Run headsup install.");
   }
   if (c.calls.focus && !probe.focus) problems.push("Focus detection isn't working: macOS Focus settings couldn't be read.");
   return problems;
