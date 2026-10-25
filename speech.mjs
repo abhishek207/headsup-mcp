@@ -20,13 +20,26 @@ export class Skip extends Error {}
 // Provider details for a built-in voice or a library voice the user added.
 export const voiceInfo = (voice, c) => VOICES[voice] ?? c.custom_voices.find((v) => v.id === voice) ?? null;
 
-// Claude's text made speakable: no code, links or markdown, one line, at most max
-// characters (cut at a word), ending in punctuation. Empty if nothing speakable is left.
+// A word that shouldn't be read out or sent to a voice provider, said plainly instead:
+// email addresses, file paths, and keys, tokens or hashes. Everything else stays as it is.
+function plainWord(word) {
+  const [, lead, core, tail] = word.match(/^([("'“‘]*)(.*?)([)"'”’.,;:!?]*)$/s);
+  if (/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(core)) return `${lead}an email address${tail}`;
+  const slashes = core.split("/").length - 1;
+  if (slashes && (/^(~|\.{1,2})?\//.test(core) || slashes > 1 || /\/[^/]*\.\w{1,5}$/.test(core))) return `${lead}a file${tail}`;
+  const mixed = (part) => part.length >= 6 && /\d/.test(part) && /[A-Za-z]/.test(part);
+  if (core.length >= 20 && /^[\w+/=.-]+$/.test(core) && core.split(/[-_.]/).some(mixed)) return `${lead}a code${tail}`;
+  return word;
+}
+
+// Claude's text made speakable: no code, links, paths, keys or markdown, one line, at most
+// max characters (cut at a word), ending in punctuation. Empty if nothing speakable is left.
 export function cleanMessage(text, max = 160) {
   let s = String(text ?? "")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/`([^`]*)`/g, "$1")
     .replace(/https?:\/\/\S+/g, "a link")
+    .replace(/\S+/g, plainWord)
     .replace(/[*#>~|[\]{}<>\\^=]/g, " ")
     .replace(/(^|\s)_+|_+(\s|$)/g, " ")
     .replace(/[\u0000-\u001f\u007f]/g, " ")

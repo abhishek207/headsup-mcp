@@ -2,6 +2,7 @@
 // Local settings page for heads-up: http://127.0.0.1:4777
 // Started by `headsup settings`; shuts itself down after 30 idle minutes.
 
+import { createHash } from "node:crypto";
 import { createReadStream, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
@@ -9,7 +10,7 @@ import { GREETING, HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason,
 import { composed, usageSummary, voiceInfo } from "./speech.mjs";
 import { PROVIDERS, checkKey, deleteKey, elevenUsage, keySource, providerVoices, saveKey } from "./tts.mjs";
 
-export const PORT = 4777;
+export const PORT = Number(process.env.HEADS_UP_PORT) || 4777; // HEADS_UP_PORT: tests only
 const IDLE_MS = 30 * 60 * 1000;
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
 
@@ -90,21 +91,46 @@ const anyKey = () => PROVIDERS.some((p) => keySource(p));
 const keyFeaturesOff = (c) => ({ ...c, project_names: { ...c.project_names, enabled: false }, live: { ...c.live, enabled: false } });
 const withKeyGate = (c) => (anyKey() ? c : keyFeaturesOff(c));
 
+const httpError = (status, message) => Object.assign(new Error(message), { status });
+
+// A JSON object from the request body (100 KB at most).
 const readBody = (req) =>
   new Promise((resolve, reject) => {
     let data = "";
     req.on("data", (c) => {
       data += c;
-      if (data.length > 1e5) req.destroy();
+      if (data.length <= 1e5) return;
+      req.removeAllListeners("data").resume();
+      reject(httpError(413, "request too large"));
     });
+    req.on("error", reject);
     req.on("end", () => {
       try {
-        resolve(JSON.parse(data || "{}"));
-      } catch (e) {
-        reject(e);
+        const body = JSON.parse(data || "{}");
+        if (body && typeof body === "object" && !Array.isArray(body)) resolve(body);
+        else reject(httpError(400, "expected a JSON object"));
+      } catch {
+        reject(httpError(400, "invalid JSON"));
       }
     });
   });
+
+// The page may run only its own two inline scripts (hashed from the file as served), talk only
+// to this server, and never be framed by another site (clickjacking a key delete or a recording).
+function pagePolicy(html) {
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);
+  return [
+    "default-src 'none'",
+    `script-src ${scripts.join(" ")}`,
+    "style-src 'unsafe-inline'",
+    "img-src 'self' data:",
+    "media-src 'self' https:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join("; ");
+}
 
 let idleTimer;
 const resetIdle = () => {
@@ -114,6 +140,9 @@ const resetIdle = () => {
 
 const server = createServer(async (req, res) => {
   resetIdle();
+  res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("x-frame-options", "DENY");
+  res.setHeader("referrer-policy", "no-referrer");
   const json = (code, body) => {
     res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store" });
     res.end(JSON.stringify(body));
@@ -126,10 +155,15 @@ const server = createServer(async (req, res) => {
     if (!String(req.headers["content-type"]).startsWith("application/json")) return json(415, { error: "json only" });
   }
   const url = new URL(req.url, `http://${req.headers.host}`);
+  // Browsers say which site a request comes from: everything but the page itself must come
+  // from the page (or be typed in), so other sites can't embed clips or trigger provider calls.
+  const site = req.headers["sec-fetch-site"];
+  if (url.pathname !== "/" && site && site !== "same-origin" && site !== "none") return json(403, { error: "forbidden site" });
   try {
     if (req.method === "GET" && url.pathname === "/") {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      return res.end(readFileSync(join(ROOT, "settings.html")));
+      const html = readFileSync(join(ROOT, "settings.html"), "utf8");
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": pagePolicy(html) });
+      return res.end(html);
     }
     if (req.method === "GET" && (url.pathname === "/favicon.svg" || url.pathname === "/favicon.ico")) {
       res.writeHead(200, { "content-type": "image/svg+xml", "cache-control": "max-age=3600" });
@@ -248,7 +282,7 @@ const server = createServer(async (req, res) => {
     }
     json(404, { error: "not found" });
   } catch (e) {
-    json(500, { error: e.message });
+    json(e.status ?? 500, { error: e.message });
   }
 });
 

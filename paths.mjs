@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = dirname(fileURLToPath(import.meta.url));
 export const DATA = process.env.HEADS_UP_HOME || join(homedir(), "Library", "Application Support", "heads-up");
-mkdirSync(DATA, { recursive: true });
+mkdirSync(DATA, { recursive: true, mode: 0o700 }); // private: alert log, Claude's lines, settings
 
 export const HELPER = [join(DATA, "bin", "media-in-use"), join(ROOT, "bin", "media-in-use")].find((p) => existsSync(p)) ?? join(DATA, "bin", "media-in-use");
 

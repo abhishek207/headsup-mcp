@@ -1,6 +1,6 @@
 import { DATA, quiet } from "./helpers.mjs";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -171,4 +171,24 @@ test("play lock: one at a time, and a dead holder's lock is taken over", async (
 
   writeFileSync(lock, JSON.stringify({ pid: process.pid })); // held by a live process
   await assert.rejects(withPlayLock(async () => {}, { waitMs: 300 }), /still playing/);
+});
+
+test("play lock: a tampered lock file can't put anything but a volume into AppleScript", async () => {
+  // A stand-in osascript that records the script it was given (and never touches the real volume).
+  const bin = join(DATA, "fake-bin");
+  const seen = join(DATA, "osascript.txt");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "osascript"), `#!/bin/sh\nprintf '%s' "$2" > "${seen}"\n`);
+  chmodSync(join(bin, "osascript"), 0o755);
+  const path = process.env.PATH;
+  process.env.PATH = `${bin}:${path}`;
+  try {
+    const before = { vol: '50\ndo shell script "touch /tmp/x"', muted: 'true\ndo shell script "touch /tmp/x"' };
+    writeFileSync(join(DATA, "playing.lock"), JSON.stringify({ pid: 2 ** 22 + 1, before }));
+    assert.equal(await withPlayLock(async () => "ran", { waitMs: 1000 }), "ran");
+    assert.equal(readFileSync(seen, "utf8"), "set volume output volume 0\nset volume output muted false");
+  } finally {
+    process.env.PATH = path;
+    rmSync(bin, { recursive: true, force: true });
+  }
 });

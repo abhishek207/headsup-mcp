@@ -84,12 +84,21 @@ headsup usage        # characters sent to your voice providers
 
 Only needed to record new lines: project names, your wording, added voices and Claude's own words. Add them on the settings page; they go into your macOS Keychain and are never written to a file or shown again. ElevenLabs keys are checked before they're saved (free), and the Test button speaks a few words with yours. Heads-up also reads `ELEVENLABS_API_KEY` / `SARVAM_API_KEY` from the environment, and Keychain items named `elevenlabs-api-key` / `sarvam-api-key`.
 
-Claude's lines are sent to your provider to be spoken, so Claude is told to keep code, paths and secrets out of them. The daily budget (1,000 characters by default) caps everything recorded automatically; what you record from the settings page isn't capped.
+Claude's lines are sent to your provider to be spoken, so Claude is told to keep code, paths and secrets out of them, and Heads-up replaces any links, file paths, email addresses and key-like strings that slip through with "a link", "a file" and so on before anything is sent. The daily budget (1,000 characters by default) caps everything recorded automatically; what you record from the settings page isn't capped.
 
 ## Where things live
 
 - The plugin folder (Claude Code keeps it under `~/.claude/plugins/`): code and built-in voices.
 - `~/Library/Application Support/heads-up` (or `$HEADS_UP_HOME`): your settings, alert log, hook state, recordings (`segments/`, `cache/clips/`) and the usage log (`usage.json`).
+
+## Privacy and security
+
+- **What leaves your Mac:** nothing, until you add a key. With a key, only the text being recorded (a project's name, your wording, Claude's line) goes to ElevenLabs or Sarvam, plus free calls to list your ElevenLabs voices and plan usage. No analytics, no telemetry, no other servers.
+- **What stays on your Mac:** the call, Focus, away and location checks all run locally. The mic and camera check only asks macOS whether a device is in use; it never opens one or records anything. Locations are your router's hardware address, kept in your settings file. The alert log (including Claude's lines) is in the data folder above, readable only by you.
+- **Keys:** in the macOS Keychain (or your environment), never in a file, a log or the settings page. `headsup uninstall` keeps them in case you reinstall and prints the command to remove them.
+- **Settings page:** listens on 127.0.0.1 only, answers only to `127.0.0.1` and `localhost` (no DNS rebinding), refuses requests from other websites, can't be framed by another site, and stops after 30 idle minutes.
+- **No dependencies:** plain Node and macOS tools, nothing installed from npm at runtime.
+- Found a security problem? See [SECURITY.md](SECURITY.md).
 
 ## Troubleshooting
 

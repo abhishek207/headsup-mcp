@@ -353,8 +353,9 @@ export async function getVolume() {
   return { vol: Number(vol), muted: muted === "true" };
 }
 
+// Only a number and a boolean ever reach the script, even from a tampered lock file.
 const setVolume = (vol, muted) =>
-  osa(`set volume output volume ${Math.round(vol)}` + (muted === undefined ? "" : `\nset volume output muted ${muted}`));
+  osa(`set volume output volume ${clamp(vol, 0, 100, 0)}` + (muted === undefined ? "" : `\nset volume output muted ${muted === true}`));
 
 // Default output counts as headphones if it is Bluetooth/USB or its name says so.
 export async function outputDevice() {

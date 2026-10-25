@@ -1,11 +1,11 @@
 import { DATA } from "./helpers.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-const { withHeadsUp, withoutHeadsUp, withoutSection, shim, pluginPath, TOOL_RULE, OLD_TOOL_RULE, PLUGIN } = await import("../tools/install.mjs");
+const { withHeadsUp, withoutHeadsUp, withoutSection, shim, pluginPath, quote, TOOL_RULE, OLD_TOOL_RULE, PLUGIN } = await import("../tools/install.mjs");
 
 // A settings.json with a pre-plugin heads-up setup mixed in with the user's own things.
 const theirs = {
@@ -60,4 +60,13 @@ test("installer: the headsup command runs the copy recorded in DATA/root", () =>
   const r = spawnSync(file, ["status"], { encoding: "utf8", env: { ...process.env, HEADS_UP_HOME: DATA } });
   assert.equal(r.stdout.trim(), "ran status");
   assert.match(readFileSync(file, "utf8"), /^#!\/bin\/sh/);
+});
+
+test("installer: odd install paths stay plain text in the headsup command", () => {
+  for (const p of ["/x/a;touch pwned", "/x/$(touch pwned)", "/x/it's here", "/x/`touch pwned`"]) {
+    const r = spawnSync("/bin/sh", ["-c", `v=${quote(p)}; printf '%s' "$v"`], { encoding: "utf8", cwd: DATA });
+    assert.equal(r.stdout, p);
+  }
+  assert.equal(existsSync(join(DATA, "pwned")), false);
+  assert.equal(quote("/usr/local/bin/node"), "/usr/local/bin/node");
 });

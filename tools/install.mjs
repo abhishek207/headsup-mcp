@@ -86,7 +86,8 @@ export function pluginPath(claudeDir) {
   }
 }
 
-const quote = (p) => (/[\s"'$`\\]/.test(p) ? `"${p.replace(/(["$`\\])/g, "\\$1")}"` : p);
+// For sh: plain if it's only safe characters, else single-quoted (nothing inside is special).
+export const quote = (p) => (/^[\w@%+=:,./-]+$/.test(p) ? p : `'${p.replace(/'/g, "'\\''")}'`);
 const has = (cmd) => spawnSync("/bin/sh", ["-c", `command -v ${cmd}`], { encoding: "utf8" }).status === 0;
 const run = (cmd, args) => spawnSync(cmd, args, { encoding: "utf8" });
 const why = (r) => (r.stderr || r.stdout || `exit ${r.status}`).trim().split("\n").slice(-1)[0];
@@ -170,6 +171,9 @@ async function main() {
     if (ourShim()) act("remove ~/.local/bin/headsup", () => rmSync(link));
     if (existsSync(join(DATA, "root"))) act("forget where the plugin was installed", () => rmSync(join(DATA, "root")));
     console.log(`\nYour settings and recordings are still in ${DATA}. Delete that folder to remove them too.`);
+    // Keys stay too (you may reinstall); say how to remove the ones the settings page saved.
+    const keys = ["heads-up-elevenlabs", "heads-up-sarvam"].filter((s) => process.platform === "darwin" && run("security", ["find-generic-password", "-s", s]).status === 0);
+    if (keys.length) console.log(`Your API keys are still in the Keychain. To remove them:\n  ${keys.map((s) => `security delete-generic-password -s ${s}`).join("\n  ")}`);
     return;
   }
 

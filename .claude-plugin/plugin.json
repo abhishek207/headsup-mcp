@@ -1,7 +1,7 @@
 {
   "name": "heads-up",
   "displayName": "Heads-up",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "Spoken voice alerts on your Mac when your coding agent finishes a task or needs you.",
   "author": {
     "name": "Brand Bakery",

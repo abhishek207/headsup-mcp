@@ -35,6 +35,16 @@ test("messages are cleaned before they're spoken", () => {
   assert.match(long, /word\.$/, "cut at a word, ends with a full stop");
 });
 
+test("messages never carry paths, email addresses or keys to the voice provider", () => {
+  assert.equal(cleanMessage("I changed /Users/me/Dev/app/core.mjs and src/app.ts."), "I changed a file and a file.");
+  assert.equal(cleanMessage("Run ./deploy.sh, then see (~/notes.md)."), "Run a file, then see (a file).");
+  assert.equal(cleanMessage("Mail kumar@example.com about it."), "Mail an email address about it.");
+  assert.equal(cleanMessage("The key sk_8f3a9b2c1d4e5f60718293a4b5c6d7e8f9a0 is set."), "The key a code is set.");
+  assert.equal(cleanMessage("Commit eef1ae917c35e65ea2187d7e2a5ac3db3a148d4a is pushed."), "Commit a code is pushed.");
+  const plain = "Pick A/B for the client/server split, and/or ship v2-release-candidate-2026 today.";
+  assert.equal(cleanMessage(plain), plain, "ordinary words with slashes, hyphens and numbers stay");
+});
+
 test("normalize: wording, library voices and live settings", () => {
   const c = normalize({
     wording: { review: "  Come and look  ", nope: "x", completed: "I've completed the task.", error: "```code```" },

@@ -46,9 +46,12 @@ function getKey(provider) {
 }
 
 // Save to the Keychain through `security -i` on stdin, so the key never appears in a process list.
+// Everything in that command line is checked first, so nothing can add a second command.
 export function saveKey(provider, key) {
   if (!PROVIDERS.includes(provider)) throw new Error("unknown provider");
   if (!/^[A-Za-z0-9_\-.:]{10,200}$/.test(key)) throw new Error("That doesn't look like an API key");
+  if (!/^[\w.@-]+$/.test(process.env.USER ?? "")) throw new Error("Couldn't save to the Keychain: unusual account name");
+  if (process.env.HEADS_UP_NO_KEYCHAIN === "1") throw new Error("The Keychain is off (HEADS_UP_NO_KEYCHAIN=1)");
   const r = spawnSync("security", ["-i"], {
     input: `add-generic-password -U -a "${process.env.USER}" -s "${KEYCHAIN[provider][0]}" -l "Heads-up ${provider} API key" -w "${key}"\n`,
     encoding: "utf8",
@@ -58,6 +61,7 @@ export function saveKey(provider, key) {
 
 export function deleteKey(provider) {
   if (!PROVIDERS.includes(provider)) throw new Error("unknown provider");
+  if (process.env.HEADS_UP_NO_KEYCHAIN === "1") return;
   spawnSync("security", ["delete-generic-password", "-a", process.env.USER, "-s", KEYCHAIN[provider][0]]);
 }
 
