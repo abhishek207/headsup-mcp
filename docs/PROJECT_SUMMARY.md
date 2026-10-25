@@ -2,7 +2,7 @@
 
 A detailed handover of everything built so far, why it's built this way, and what's next. Written so a new Claude thread (or Claude Project) can pick up without the original conversation.
 
-*Last updated: 25 October 2026. Version 1.3.1.*
+*Last updated: 25 October 2026. Version 1.4.0.*
 
 ---
 
@@ -12,7 +12,7 @@ A detailed handover of everything built so far, why it's built this way, and wha
 
 **Solution.** Heads-up plays a short spoken line on the Mac's speaker ("Hello from Kosh. I need your review.") so you can hear it from across the room and come back. It's a local MCP server (one tool, `notify_user`) plus Claude Code hooks, with a settings page and a CLI.
 
-**Owner and audience.** Built by Abhishek (GitHub `abhishek207`) for his own Mac first. The plan is to release it **free and public**. Anything that costs money (recording new audio) must use **each user's own ElevenLabs or Sarvam API key**; the built-in clips need no key.
+**Owner and audience.** Built by Abhishek (GitHub `abhishek207`) for his own Mac first. **Nothing is public or free yet** (owner's decision, 25 Oct 2026): the repo stays private and nothing goes to npm or online until the owner decides on release and monetization. Anything that costs money (recording new audio) must use **each user's own ElevenLabs or Sarvam API key**; the built-in clips need no key.
 
 **Principles that came out of the build**
 - Speak only when it's useful: never while you're typing, on a call, in Focus, or away from home.
@@ -164,7 +164,12 @@ Status panel (big state, live waveform of the real clip with a playhead sweep, p
     "auto": true,
     "speakers":   { "floor": 50, "target": 65, "cap": 80 },
     "headphones": { "floor": 15, "target": 25, "cap": 35 }
-  }
+  },
+  "wording": { "review": "Your review is needed." },   // edited alert lines (≤120 chars)
+  "custom_voices": [                                    // up to 30, from the user's provider
+    { "id": "el-<voice_id>", "provider": "elevenlabs", "provider_id": "<voice_id>", "name": "Rachel", "accent": "American", "gender": "Female", "fallback": "american-male" }
+  ],
+  "live": { "enabled": true, "max_chars": 160, "daily_chars": 1000, "fast": false }
 }
 ```
 Other data files: `state.json` (last 100 alerts: time, status, source `claude` / `hook:<Event>` / `settings test` / `cli test`, project, result, reason), `turns.json`, `hook.log`, `segments/`, `cache/projects/`, `archive/` (old clip sets and the pre-glass page).
@@ -219,6 +224,18 @@ Not yet verified live:
 - Playback is locked across processes (`DATA/playing.lock`). Two sessions alerting at once used to be able to leave the volume at the alert level (the second read the raised volume as "before"). A crash mid-alert used to do the same; the next alert now restores the saved volume first.
 - A fractional `repeat` (e.g. 1.5) made playback throw while the tool still said "Playing". It's rounded now.
 
+### 8.3 Added in 1.4.0
+- **Claude's own words.** `notify_user` takes an optional `message`. It's cleaned (`cleanMessage`: no code, links or markdown, cut at a word to `live.max_chars`), recorded in the current voice with the user's key ("Hello." is cut from the built-in track, so only the message costs), cached by text, and played through the same guardrails, lock and volume caps. Fallback order in `prepare()`: message with project name → message → alert line with project name → alert line → built-in track; the tool's answer says what was spoken and why anything was dropped. ElevenLabs "fast" option uses Flash v2.5 (half the credits).
+- **Daily budget and usage log.** `live.daily_chars` (default 1,000 per provider per day) caps everything recorded automatically: live lines, project names, alerts in new voices. Page actions aren't capped. `DATA/usage.json` keeps 62 days of characters per provider and kind; the page and `headsup usage` show today and this month, plus the ElevenLabs plan counter (`/v1/user/subscription`, free).
+- **Voice library.** "Add a voice" on the page lists the voices in the user's ElevenLabs account (`/v2/voices`, free, browser previews) or Sarvam's 37 Bulbul v3 speakers. Added voices live in `custom_voices` with a built-in `fallback`. Alerts in them are recorded on first play or all at once (cost shown first, ~570 characters for all 20).
+- **Edit wording.** Pencil on each alert: save records only that line in the current voice; other voices record it on first play; "Use original" goes back to the built-in clip. The MCP tool description uses the edited words.
+- **Keys.** ElevenLabs keys are checked before saving (free); a rejected key is never stored. "Test" speaks "Your key works." (~20 characters).
+- **Installer.** `npm run setup` / `headsup install` (see README). `--dry-run`, `--uninstall`. Replaces older heads-up hooks (any path containing headsup-mcp, heads-up or status-voice) instead of doubling them.
+- **Logo.** "Ping" mark (owner's pick from six options), `assets/logo.svg`, used as favicon and in the page header.
+- Tests: 34, including the live/wording/library/budget paths with a fake TTS (`HEADS_UP_FAKE_TTS=1`) and the installer's settings edits. Tests can't read real keys (`HEADS_UP_NO_KEYCHAIN=1`).
+
+Not yet verified live (1.4.0): real ElevenLabs/Sarvam calls for live lines, library listing and key check with the owner's keys; the page on the Mac; the installer against the owner's real `~/.claude/settings.json`.
+
 ## 9. Known limitations
 
 - macOS only.
@@ -231,8 +248,8 @@ Not yet verified live:
 
 ## 10. Backlog / ideas (owner hasn't chosen yet unless noted)
 
-1. **Edit wording on the page**: change an alert's text, see the character cost, regenerate only that clip with the user's own key. *(Owner wants this to use the user's key; requested direction.)*
-2. **One-command installer** (`npx headsup-mcp install` or `scripts/install.sh`): build the Swift helper, register the MCP, add the allow rule and hooks, link the CLI. Needed before a public release.
+1. ~~Edit wording on the page~~ (done in 1.4.0).
+2. ~~One-command installer~~ (done in 1.4.0: `npm run setup`).
 3. **Phone push when away from home** (ntfy / Pushover / iMessage to self) instead of silence.
 4. **Escalation**: repeat once after 5 minutes without a reply, then push to phone.
 5. **Menu bar icon** for one-click mute and status.
