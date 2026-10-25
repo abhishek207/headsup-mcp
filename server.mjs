@@ -1,18 +1,22 @@
 #!/usr/bin/env node
-// heads-up: a tiny zero-dependency MCP server (stdio) that plays a
-// pre-recorded voice line on the Mac speaker so the user hears when Claude
-// needs them or has finished. Guardrails and settings live in core.mjs and
+// heads-up: a tiny zero-dependency MCP server (stdio) that plays a short
+// voice line on the Mac speaker so the user hears when Claude needs them or has
+// finished: a pre-recorded line, or Claude's own words recorded with the user's
+// ElevenLabs or Sarvam key. Guardrails and settings live in core.mjs and
 // config.json; run `headsup` for the settings page.
 
 import { createInterface } from "node:readline";
-import { STATUSES, TEMPLATES, alert, detectorProblems, projectFor } from "./core.mjs";
+import { STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, projectFor, textFor } from "./core.mjs";
+
+const config = loadConfig();
+const PREPARE_WAIT_MS = 15_000; // how long the tool waits for a live line to be recorded
 
 const TOOL = {
   name: "notify_user",
   description:
     "Play a short spoken alert on the user's Mac speaker so they can come back to the computer. " +
     "Call it once at the end of a turn (or when starting something long), picking the status that matches why you stopped:\n" +
-    TEMPLATES.map((t) => `- ${t.id}: ${t.when} ("${t.text}")`).join("\n") +
+    TEMPLATES.map((t) => `- ${t.id}: ${t.when} ("${textFor(t.id, config)}")`).join("\n") +
     "\nTheir settings (off switch, mute, quiet hours, location lock, cooldown) may block it; a skipped alert is not an error, so don't retry.",
   inputSchema: {
     type: "object",
@@ -25,6 +29,15 @@ const TOOL = {
         default: 1,
         description: "How many times to play the line (use 2 for something urgent).",
       },
+      message: {
+        type: "string",
+        maxLength: 400,
+        description:
+          `Optional: your own short line, spoken instead of the status's fixed line when that line doesn't say enough ` +
+          `(e.g. "The migration ran, but two tables need your review."). One or two plain sentences in first person, ` +
+          `at most ${config.live.max_chars} characters; no code, paths, links or secrets, because it's sent to the user's ` +
+          `text-to-speech provider. Still pick the closest status: if the line can't be recorded, the status's line plays instead.`,
+      },
       volume: {
         type: "integer",
         minimum: 0,
@@ -36,20 +49,26 @@ const TOOL = {
   },
 };
 
-function callTool(args = {}) {
-  const r = alert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(process.cwd()) });
+async function callTool(args = {}) {
+  const message = typeof args.message === "string" && args.message.trim() ? args.message : null;
+  const r = alert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(process.cwd()), message });
   if (!r.ok) return { isError: true, content: [{ type: "text", text: r.error }] };
-  const text = r.played ? `Playing "${r.line}"` : `Not played: ${r.reason}. This is the user's setting; don't retry.`;
+  if (!r.played) return { content: [{ type: "text", text: `Not played: ${r.reason}. This is the user's setting; don't retry.` }] };
+  if (!message) return { content: [{ type: "text", text: `Playing "${r.line}"` }] };
+  // Wait for the recording so the answer says what was actually spoken.
+  const p = await Promise.race([r.prepared, new Promise((ok) => setTimeout(() => ok(null), PREPARE_WAIT_MS).unref())]);
+  if (!p) return { content: [{ type: "text", text: `Recording "${r.line}"; it plays when ready.` }] };
+  const text = p.live ? `Playing "${p.line}"` : `Playing "${p.line}" (your message wasn't spoken: ${p.note ?? "it couldn't be recorded"}; don't retry)`;
   return { content: [{ type: "text", text }] };
 }
 
-function handle(msg) {
+async function handle(msg) {
   switch (msg.method) {
     case "initialize":
       return {
         protocolVersion: msg.params?.protocolVersion ?? "2025-06-18",
         capabilities: { tools: {} },
-        serverInfo: { name: "heads-up", version: "1.3.1" },
+        serverInfo: { name: "heads-up", version: "1.4.0" },
       };
     case "ping":
       return {};
@@ -68,7 +87,8 @@ for (const p of detectorProblems()) process.stderr.write(`heads-up: ${p}\n`);
 
 const send = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
 
-createInterface({ input: process.stdin }).on("line", (line) => {
+// Replies go out as each call finishes, so a live line being recorded doesn't hold up a ping.
+createInterface({ input: process.stdin }).on("line", async (line) => {
   if (!line.trim()) return;
   let msg;
   try {
@@ -78,7 +98,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   }
   if (msg.id === undefined) return; // notification (e.g. notifications/initialized)
   try {
-    send({ jsonrpc: "2.0", id: msg.id, result: handle(msg) });
+    send({ jsonrpc: "2.0", id: msg.id, result: await handle(msg) });
   } catch (e) {
     send({ jsonrpc: "2.0", id: msg.id, error: { code: e.code ?? -32603, message: e.message ?? String(e) } });
   }

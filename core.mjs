@@ -4,12 +4,13 @@
 // to every running Claude session.
 
 import { execFile, execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { DATA, ROOT } from "./paths.mjs";
-import { VOICES as VOICE_INFO, cachedSegment, extractMessage, hasKey, joinClips, segKey, synth } from "./tts.mjs";
+import { Skip, cleanMessage, compose, costOf, voiceInfo } from "./speech.mjs";
+import { PROVIDERS, cachedSegment, segKey } from "./tts.mjs";
 
 const run = promisify(execFile);
 export { DATA, ROOT };
@@ -21,6 +22,7 @@ const FALLBACK_VOICE = "american-male";
 
 const { greeting, templates } = JSON.parse(readFileSync(join(ROOT, "templates.json"), "utf8"));
 export const TEMPLATES = templates;
+export const GREETING = greeting;
 export const STATUSES = Object.fromEntries(templates.map((t) => [t.id, `${greeting} ${t.text}`]));
 
 // Ceilings no config value can exceed (ear safety, AirPods especially).
@@ -50,7 +52,36 @@ export const DEFAULTS = {
     speakers: { floor: 50, target: 65, cap: 80 },
     headphones: { floor: 15, target: 25, cap: 35 },
   },
+  // The user's own wording for an alert ({ review: "Your review is needed." }), recorded with their key.
+  wording: {},
+  // Voices added from the user's ElevenLabs account or Sarvam's speakers (see normalize for the shape).
+  custom_voices: [],
+  // Claude's own lines (notify_user's message), spoken with the user's key.
+  // daily_chars caps everything recorded automatically per provider per day (0 = nothing new).
+  live: { enabled: true, max_chars: 160, daily_chars: 1000, fast: false },
 };
+
+const LIMITS = { wording_chars: 120, custom_voices: 30 };
+const text = (s, n) => String(s ?? "").replace(/[^\p{L}\p{N} .,'&()-]/gu, "").trim().slice(0, n);
+
+// Library voices: { id, provider, provider_id, name, accent, gender, fallback }. id is derived,
+// fallback is the built-in voice to use when this one can't be recorded (no key, budget).
+function cleanCustomVoices(list) {
+  const builtin = builtinVoices();
+  return (Array.isArray(list) ? list : [])
+    .filter((v) => PROVIDERS.includes(v?.provider) && /^[A-Za-z0-9_-]{1,64}$/.test(v.provider_id ?? ""))
+    .map((v) => ({
+      id: `${v.provider === "sarvam" ? "sarvam" : "el"}-${v.provider_id}`,
+      provider: v.provider,
+      provider_id: v.provider_id,
+      name: text(v.name, 40) || v.provider_id,
+      accent: text(v.accent, 30),
+      gender: text(v.gender, 20),
+      fallback: builtin.includes(v.fallback) ? v.fallback : FALLBACK_VOICE,
+    }))
+    .filter((v, i, all) => all.findIndex((x) => x.id === v.id) === i)
+    .slice(0, LIMITS.custom_voices);
+}
 
 const clamp = (n, lo, hi, fallback) => (Number.isFinite(Number(n)) ? Math.min(hi, Math.max(lo, Math.round(Number(n)))) : fallback);
 const isTime = (s) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -65,7 +96,8 @@ function cleanLimits(v = {}, d, hard) {
 // Merge anything (file contents, a form post) onto defaults and enforce limits.
 export function normalize(c = {}) {
   const d = DEFAULTS;
-  const voices = listVoices();
+  const custom_voices = cleanCustomVoices(c.custom_voices);
+  const voices = [...builtinVoices(), ...custom_voices.map((v) => v.id)];
   return {
     enabled: c.enabled !== false,
     voice: voices.includes(c.voice) ? c.voice : voices.includes(d.voice) ? d.voice : voices[0],
@@ -113,6 +145,19 @@ export function normalize(c = {}) {
       speakers: cleanLimits(c.volume?.speakers, d.volume.speakers, HARD_CAP.speakers),
       headphones: cleanLimits(c.volume?.headphones, d.volume.headphones, HARD_CAP.headphones),
     },
+    wording: Object.fromEntries(
+      Object.entries(c.wording ?? {})
+        .filter(([id]) => id in STATUSES)
+        .map(([id, t]) => [id, cleanMessage(t, LIMITS.wording_chars)])
+        .filter(([id, t]) => t && t !== TEMPLATES.find((x) => x.id === id).text),
+    ),
+    custom_voices,
+    live: {
+      enabled: c.live?.enabled !== false,
+      max_chars: clamp(c.live?.max_chars, 40, 400, d.live.max_chars),
+      daily_chars: clamp(c.live?.daily_chars, 0, 20000, d.live.daily_chars),
+      fast: c.live?.fast === true,
+    },
   };
 }
 
@@ -142,7 +187,10 @@ export function saveConfig(c) {
   return clean;
 }
 
-export function listVoices() {
+// Every voice the user can pick: the built-in ones, then library voices they added.
+export const listVoices = (c = null) => [...builtinVoices(), ...(c?.custom_voices ?? []).map((v) => v.id)];
+
+export function builtinVoices() {
   try {
     return readdirSync(VOICES, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
   } catch {
@@ -150,7 +198,7 @@ export function listVoices() {
   }
 }
 
-const findClip = (voice, status) =>
+export const findClip = (voice, status) =>
   ["mp3", "wav", "m4a", "aiff"].map((ext) => join(VOICES, voice, `${status}.${ext}`)).find(existsSync);
 export const clipFor = (voice, status) => findClip(voice, status) ?? findClip(FALLBACK_VOICE, status);
 
@@ -407,7 +455,6 @@ const play = (files, c, requested) =>
 
 // Project names: "Hello from Kosh. I need your review."
 const SEGMENTS = join(DATA, "segments");
-const PROJECT_CLIPS = join(DATA, "cache", "projects");
 const MAX_NEW_NAMES_PER_DAY = 20; // spending guard: new names synthesized per day
 const GENERIC_DIRS = /^(scratch|scratchpad|tmp|temp|downloads|desktop|documents|dev|code|projects|src|repos)([-_].*)?$/i;
 const ACRONYMS = new Set(["ai", "api", "ui", "ux", "ocr", "mcp", "cli", "sdk", "db", "ios", "css", "html", "seo", "llm", "pdf", "crm", "cms"]);
@@ -447,52 +494,84 @@ export function spokenName(project, c = loadConfig()) {
 
 const namesProject = (project, c) => Boolean(project && c.project_names.enabled && !c.project_names.muted.includes(project));
 const projectGreeting = (project, c) => `Hello from ${spokenName(project, c)}.`;
+const nameId = (project) => `hello-from-${slug(project)}`;
 
 // Whether "Hello from <project>." is already recorded in this voice (no credits needed).
 export const nameRecorded = (voice, project, c = loadConfig()) =>
-  Boolean(cachedSegment(join(SEGMENTS, voice), segKey(`hello-from-${slug(project)}`, projectGreeting(project, c))));
+  Boolean(cachedSegment(join(SEGMENTS, voice), segKey(nameId(project), projectGreeting(project, c))));
 
 function namesMadeToday() {
   const start = new Date().setHours(0, 0, 0, 0);
   let n = 0;
-  for (const v of listVoices()) {
+  if (!existsSync(SEGMENTS)) return 0;
+  for (const v of readdirSync(SEGMENTS)) {
     const dir = join(SEGMENTS, v);
-    if (!existsSync(dir)) continue;
+    if (!statSync(dir).isDirectory()) continue;
     for (const f of readdirSync(dir)) if (f.startsWith("hello-from-") && statSync(join(dir, f)).mtimeMs >= start) n++;
   }
   return n;
 }
 
-// Path to "Hello from <project>." + this alert in this voice, built once and cached.
-// Null when names are off for the project, there's no key, the daily limit is hit,
-// or anything fails; the caller then plays the plain "Hello." clip.
-export async function projectClip(voice, status, project, c = loadConfig()) {
+// The alert's words: the user's own wording if they changed it, else the built-in line.
+export const textFor = (status, c = loadConfig()) => c.wording[status] ?? TEMPLATES.find((t) => t.id === status)?.text;
+
+// The clip to play and the words in it: { file, line, live, note }. Tries what was asked for
+// first (Claude's own message, a project name, edited wording, a library voice), then the
+// same without the message, then without the project name, and finally the built-in track.
+// Anything that needs recording uses the user's key and, unless force, the daily budget.
+// note says why the first choice wasn't possible ("no ElevenLabs key").
+export async function prepare(voice, status, { project = null, message = null, force = false, kind = null } = {}, c = loadConfig()) {
   const t = TEMPLATES.find((x) => x.id === status);
-  if (!t || !namesProject(project, c) || !VOICE_INFO[voice]) return null;
-  const greet = projectGreeting(project, c);
-  const out = join(PROJECT_CLIPS, voice, segKey(slug(project), greet), `${segKey(status, t.text)}.mp3`);
-  if (existsSync(out)) return out;
-  const segDir = join(SEGMENTS, voice);
-  mkdirSync(segDir, { recursive: true });
-  // The message part comes from the built-in track (cut at its 0.6s gap) the first time.
-  let msg = cachedSegment(segDir, segKey(status, t.text));
-  if (!msg) {
-    const track = clipFor(voice, status);
-    if (!track) return null;
-    msg = join(segDir, `${segKey(status, t.text)}.wav`);
-    extractMessage(track, msg);
+  const builtin = findClip(voice, status); // null for library voices
+  const fallback = builtin ?? clipFor(voiceInfo(voice, c)?.fallback ?? FALLBACK_VOICE, status);
+  let note = null;
+  const greetings = [];
+  if (namesProject(project, c)) {
+    if (nameRecorded(voice, project, c) || namesMadeToday() < MAX_NEW_NAMES_PER_DAY) greetings.push({ greet: projectGreeting(project, c), greetId: nameId(project) });
+    else note = `the daily limit of ${MAX_NEW_NAMES_PER_DAY} new project names is reached`;
   }
-  const gKey = segKey(`hello-from-${slug(project)}`, greet);
-  let g = cachedSegment(segDir, gKey);
-  if (!g) {
-    if (!hasKey(VOICE_INFO[voice].provider) || namesMadeToday() >= MAX_NEW_NAMES_PER_DAY) return null;
-    const { data, ext } = await synth(voice, greet);
-    g = join(segDir, `${gKey}.${ext}`);
-    writeFileSync(g, data);
+  greetings.push({ greet: greeting, greetId: "greeting", greetTrack: builtin });
+  const wording = textFor(status, c);
+  const messages = [{ text: wording, msgId: status, msgTrack: wording === t.text ? builtin : null }];
+  if (message && (c.live.enabled || force)) messages.unshift({ text: message, msgId: "live", fast: c.live.fast, live: true });
+  else if (message) note = "live messages are switched off";
+  kind ??= force ? "test" : null;
+  for (const m of messages) {
+    for (const g of greetings) {
+      const line = `${g.greet} ${m.text}`;
+      if (g.greetTrack && m.msgTrack) return { file: builtin, line, live: false, note };
+      try {
+        const file = await compose(voice, c, { ...g, ...m, budget: force ? undefined : c.live.daily_chars, kind: kind ?? (m.live ? "live" : g.greetId !== "greeting" ? "names" : builtin ? "wording" : "voices") });
+        return { file, line, live: Boolean(m.live), note };
+      } catch (e) {
+        note ??= e instanceof Skip ? e.message : `recording failed (${String(e.message).slice(0, 120)})`;
+      }
+    }
   }
-  mkdirSync(dirname(out), { recursive: true });
-  joinClips(g, msg, out);
-  return out;
+  return { file: fallback, line: STATUSES[status], live: false, note };
+}
+
+// Characters needed to record these alerts in a voice ("Hello." + each line); 0 when
+// they're built in or already recorded.
+export function recordingCost(voice, c = loadConfig(), ids = Object.keys(STATUSES)) {
+  const track = (id) => findClip(voice, id);
+  const parts = ids.map((id) => ({ id, text: textFor(id, c), track: textFor(id, c) === TEMPLATES.find((t) => t.id === id).text ? track(id) : null }));
+  return costOf(voice, [{ id: "greeting", text: greeting, track: track(ids[0]) }, ...parts]);
+}
+
+// Records these alerts in a voice now (a page action, so no daily budget). Returns the
+// characters used and the first reason something couldn't be recorded.
+export async function recordAlerts(voice, c = loadConfig(), ids = Object.keys(STATUSES), kind = "voices") {
+  const before = recordingCost(voice, c, ids);
+  let note = null;
+  for (const id of ids) {
+    const p = await prepare(voice, id, { force: true, kind }, c);
+    if (p.note) {
+      note = p.note;
+      break;
+    }
+  }
+  return { spent: before - recordingCost(voice, c, ids), note };
 }
 
 // Alerts are queued so overlapping calls never fight over the volume restore.
@@ -500,26 +579,35 @@ let queue = Promise.resolve();
 
 // Checks guardrails, records the outcome and starts playback in the background.
 // force=true (test buttons) skips the guardrails but never the volume caps.
-// project: name to announce ("Hello from <project>."); meta: extra log fields.
-export function alert(status, { repeat = 1, volume, force = false, source = "claude", voice, project = null, meta = {} } = {}) {
+// project: name to announce ("Hello from <project>."); message: Claude's own words to say
+// instead of the alert's line (falls back to the line); meta: extra log fields.
+// Returns at once; prepared resolves to what will actually play ({ line, live, note }).
+export function alert(status, { repeat = 1, volume, force = false, source = "claude", voice, project = null, message = null, meta = {} } = {}) {
   if (!(status in STATUSES)) return { ok: false, error: `Unknown status "${status}". Use one of: ${Object.keys(STATUSES).join(", ")}.` };
   const c = loadConfig();
-  const useVoice = voice && listVoices().includes(voice) ? voice : c.voice;
-  const clip = clipFor(useVoice, status);
-  if (!clip) return { ok: false, error: `Voice "${useVoice}" has no clip for "${status}".` };
+  const useVoice = voice && listVoices(c).includes(voice) ? voice : c.voice;
+  if (!clipFor(voiceInfo(useVoice, c)?.fallback ?? useVoice, status)) return { ok: false, error: `Voice "${useVoice}" has no clip for "${status}".` };
+  const said = message ? cleanMessage(message, c.live.max_chars) || null : null;
   const reason = force ? null : blockedReason(status, c);
-  record({ status, source, ...(project && { project }), ...meta, result: reason ? "skipped" : "played", ...(reason && { reason }) });
+  record({ status, source, ...(project && { project }), ...(said && { message: said }), ...meta, result: reason ? "skipped" : "played", ...(reason && { reason }) });
   if (reason) return { ok: true, played: false, reason };
   const vol = Number.isFinite(volume) ? Math.min(100, Math.max(0, volume)) : undefined;
   const times = clamp(repeat, 1, 3, 1);
+  // Recording starts now, in parallel with any alert still playing; playback waits its turn.
+  const prepared = prepare(useVoice, status, { project, message: said, force }, c).catch((e) => ({
+    file: clipFor(FALLBACK_VOICE, status),
+    line: STATUSES[status],
+    live: false,
+    note: e.message,
+  }));
   queue = queue
     .then(async () => {
-      const named = project ? await projectClip(useVoice, status, project, c).catch((e) => (process.stderr.write(`heads-up: ${e.message}\n`), null)) : null;
-      const files = [...(c.chime && existsSync(CHIME) ? [CHIME] : []), ...Array(times).fill(named ?? clip)];
+      const { file } = await prepared;
+      const files = [...(c.chime && existsSync(CHIME) ? [CHIME] : []), ...Array(times).fill(file)];
       await play(files, c, vol);
     })
     .catch((e) => process.stderr.write(`heads-up: ${e.message}\n`));
-  const text = TEMPLATES.find((t) => t.id === status).text;
-  const line = namesProject(project, c) ? `${projectGreeting(project, c)} ${text}` : STATUSES[status];
-  return { ok: true, played: true, line, done: queue };
+  const greet = namesProject(project, c) ? projectGreeting(project, c) : greeting;
+  const line = `${greet} ${said && (c.live.enabled || force) ? said : textFor(status, c)}`;
+  return { ok: true, played: true, line, prepared, done: queue };
 }

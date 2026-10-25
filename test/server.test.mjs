@@ -30,6 +30,7 @@ test("MCP server: initialize, list, call", () => {
   const [tool] = out[2].result.tools;
   assert.equal(tool.name, "notify_user");
   assert.equal(tool.inputSchema.properties.status.enum.length, 20);
+  assert.match(tool.inputSchema.properties.message.description, /no code, paths, links or secrets/);
   assert.match(out[3].result.content[0].text, /^Not played: disabled by HEADS_UP_DISABLED=1\. .*don't retry/);
   assert.equal(out[4].result.isError, true);
   assert.equal(out[5].error.code, -32601);
