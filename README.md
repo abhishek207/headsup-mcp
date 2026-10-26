@@ -4,7 +4,7 @@ Spoken alerts on your Mac when Claude Code finishes a task or needs you, so you 
 
 > "Hello from Kosh. I need your review."
 
-Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a skill that teaches the agent when to speak up, and hooks. The agent calls one tool, `notify_user`, and your Mac plays a short line: one of 20 built-in clips, or, with your own ElevenLabs or Sarvam key, Claude's own words in the voice you picked. It stays quiet when you're at the keyboard, on a call, in a Focus mode, or away from home.
+Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a skill that teaches the agent when to speak up, and hooks. The agent calls one tool, `notify_user`, and your Mac plays a short line: one of 20 built-in clips, or, with your own ElevenLabs or Sarvam key, Claude's own words in the voice you picked. It stays quiet when you're on a call, in a Focus mode, or away from home, and it can also wait until you've left the keyboard.
 
 ## What it does
 
@@ -17,7 +17,7 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 - **Cost you can see**: characters used today and this month per provider, plus your ElevenLabs plan's credit counter.
 - **Automatic alerts** via Claude Code hooks: permission prompts, and turns that run longer than 2 minutes, even if Claude forgets to call the tool. Background sessions (`claude -p`, SDK workers) never trigger them.
 - **Polite by default**
-  - Away detection: silent if you used the keyboard or mouse in the last 60 seconds.
+  - Away detection (off by default): silent if you used the keyboard or mouse in the last 60 seconds. It's off because with several sessions open you're usually typing in another one when this one needs you; switch it on in settings.
   - Calls and Focus: silent while a microphone is in use, or a macOS Focus is on.
   - Locations: optionally only play on saved networks (Home, office), recognised by the router's hardware address. No GPS.
   - Quiet hours, a gap between alerts, and an hourly limit.

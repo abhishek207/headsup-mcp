@@ -39,8 +39,9 @@ export const DEFAULTS = {
   cooldown_seconds: 20,
   max_per_hour: 20,
   chime: true,
-  // Speak only after this long without keyboard or mouse input.
-  away: { enabled: true, idle_seconds: 60 },
+  // Speak only after this long without keyboard or mouse input. Off by default: with several
+  // sessions open you're usually typing in another one when this one needs you.
+  away: { enabled: false, idle_seconds: 60 },
   // Stay silent while a mic or camera is in use (calls) or a Focus is on.
   calls: { mic: true, camera: true, focus: true },
   // "Hello from <project>." instead of "Hello." Opt-in: needs the user's own TTS key.
@@ -120,7 +121,7 @@ export function normalize(c = {}) {
     max_per_hour: clamp(c.max_per_hour, 1, 120, d.max_per_hour),
     chime: c.chime !== false,
     away: {
-      enabled: c.away?.enabled !== false,
+      enabled: c.away?.enabled === true,
       idle_seconds: clamp(c.away?.idle_seconds, 10, 3600, d.away.idle_seconds),
     },
     calls: {

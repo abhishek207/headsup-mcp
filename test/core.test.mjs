@@ -19,6 +19,13 @@ test("normalize fills defaults for an empty config", () => {
   assert.equal(Object.keys(c.statuses).length, 20);
 });
 
+test("away detection is off out of the box, and a saved choice is kept either way", () => {
+  assert.equal(normalize({}).away.enabled, false);
+  assert.equal(normalize({ away: { enabled: true } }).away.enabled, true);
+  assert.equal(normalize({ away: { enabled: false } }).away.enabled, false);
+  assert.equal(normalize({ away: { enabled: "yes" } }).away.enabled, false);
+});
+
 test("normalize never lets volume exceed the hard caps", () => {
   const c = normalize({ volume: { speakers: { floor: 99, target: 99, cap: 200 }, headphones: { floor: 80, target: 90, cap: 100 } } });
   assert.equal(c.volume.speakers.cap, HARD_CAP.speakers);
