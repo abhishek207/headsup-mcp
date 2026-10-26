@@ -9,6 +9,7 @@
 //   headsup usage        characters sent to your voice providers
 //   headsup version      version and maker
 //   headsup install      install the plugin in Claude Code (and Codex); uninstall to undo
+//   headsup serve        run the MCP server on stdio (what `npx headsup-mcp serve` starts for other MCP clients)
 
 import { spawn, execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -106,6 +107,10 @@ switch (cmd) {
     if (a) console.log(`ElevenLabs plan: ${a.used} of ${a.limit} credits used${a.resets ? `, resets ${new Date(a.resets).toLocaleDateString()}` : ""}`);
     break;
   }
+  case "serve":
+    // Nothing else may write to stdout from here on: it carries the JSON-RPC replies.
+    await import("./server.mjs");
+    break;
   case "install":
   case "uninstall":
     execFileSync(process.execPath, [join(ROOT, "tools", "install.mjs"), ...(cmd === "uninstall" ? ["--uninstall"] : []), ...process.argv.slice(3)], { stdio: "inherit" });

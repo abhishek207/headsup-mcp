@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.abhishek207/headsup-mcp",
+  "title": "Heads-up",
+  "description": "Spoken voice alerts on your Mac when your coding agent finishes a task or needs you.",
+  "websiteUrl": "https://brandbakery.tech",
+  "repository": {
+    "url": "https://github.com/abhishek207/headsup-mcp",
+    "source": "github"
+  },
+  "version": "1.5.5",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "headsup-mcp",
+      "version": "1.5.5",
+      "transport": { "type": "stdio" },
+      "packageArguments": [
+        { "type": "positional", "value": "serve" }
+      ]
+    }
+  ]
+}

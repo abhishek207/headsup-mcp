@@ -68,6 +68,16 @@ From a checkout, `npm run setup` does the same with the local copy. It's safe to
 
 Check the manifests with `npm run validate`.
 
+### Other MCP clients
+
+Any MCP client on a Mac can run the server on its own over stdio:
+
+```bash
+npx -y headsup-mcp serve
+```
+
+That gives the client the `notify_user` tool. The skill and hooks only come with the Claude Code plugin, and `npx headsup-mcp install` builds the call detector.
+
 ## Use
 
 ```bash

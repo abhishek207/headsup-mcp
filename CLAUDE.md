@@ -17,7 +17,8 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 | `server.mjs` | MCP stdio server (hand-rolled JSON-RPC, async replies). One tool: `notify_user { status, message?, repeat?, volume? }`. Project = `projectFor(process.cwd())`. Waits up to 15 s for a live line so the answer says what was spoken. |
 | `hook.mjs` | Hook entry (Claude Code + Codex): UserPromptSubmit (turn start), Notification / PermissionRequest (→ `approval`), Stop (long turn → `completed`/`input`). Ignores background sessions. Plays in a detached child. Logs to `DATA/hook.log`. |
 | `settings.mjs` + `settings.html` | Local settings page on 127.0.0.1:4777 (host/origin/Sec-Fetch-Site checks, JSON-only POSTs, CSP with per-request script hashes, no framing). HTML is re-read per request. |
-| `cli.mjs` | `headsup` command: settings, on/off, mute/unmute, status, test, say, usage, install/uninstall. |
+| `cli.mjs` | `headsup` command: settings, on/off, mute/unmute, status, test, say, usage, install/uninstall, serve (the MCP server on stdio, for `npx -y headsup-mcp serve`). |
+| `server.json`, `glama.json` | Official MCP registry entry (`mcp-publisher publish`, after the same version is on npm; the registry checks `mcpName` in package.json) and the Glama listing claim. Not in the npm package. |
 | `tools/install.mjs` | `headsup install` / `npm run setup` / `npx github:abhishek207/headsup-mcp install`: call detector into `DATA/bin`, marketplace add + plugin install (Claude Code, Codex), allow rule, removes pre-plugin setup, `headsup` shim. Idempotent; `--dry-run`, `--uninstall`, `--source`. |
 | `assets/logo.svg` | Logo ("ping"), served as the page's favicon and header mark. |
 | `templates.json` | Greeting + the 20 alerts (`id`, `text`, `when`). `when` feeds the MCP tool description. |
@@ -39,6 +40,7 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 - A skipped alert is not an error: the tool returns "Not played: <reason>" and Claude must not retry.
 - Guardrail order in `blockedReason`: env kill switch → master switch → mute → per-alert switch → quiet hours → location lock → Focus → mic/camera → away (idle) → cooldown → hourly limit. `force` (tests) skips guardrails but never volume caps.
 - Live speech, edited wording, library voices and project names all go through `prepare()` → `compose()`: guardrails and volume caps apply as for any alert, automatic recording respects `live.daily_chars`, and every failure falls back to a built-in clip with a `note` (never an error).
+- A release bumps the version in `package.json`, both `plugin.json`, `serverInfo` in `server.mjs` and `server.json` (twice); a test fails if they differ. `headsup serve` must print nothing but JSON-RPC to stdout.
 - Spending: generating audio costs the user's credits. Dry-run, state the character count, and get a go-ahead before any batch. Project names are capped at 20 new names per day.
 - The settings page runs under a strict CSP: only its inline `<script>` blocks (allowed by hash, computed when served), no inline event handlers (`onclick=`), no external scripts or fonts, `fetch` to itself only. Keep it that way; build UI with `addEventListener`.
 - Anything sent to a TTS provider goes through `cleanMessage()`, which also swaps links, file paths, email addresses and key-like strings for plain words. Don't bypass it.

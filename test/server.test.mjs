@@ -7,10 +7,13 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 const SERVER = fileURLToPath(new URL("../server.mjs", import.meta.url));
+const CLI = fileURLToPath(new URL("../cli.mjs", import.meta.url));
+const json = (file) => JSON.parse(readFileSync(new URL(`../${file}`, import.meta.url), "utf8"));
 
 // Send JSON-RPC lines to a fresh server and return its replies by id.
-function rpc(...messages) {
-  const r = spawnSync(process.execPath, [SERVER], {
+const rpc = (...messages) => rpcVia([SERVER], ...messages);
+function rpcVia(argv, ...messages) {
+  const r = spawnSync(process.execPath, argv, {
     input: messages.map((m) => JSON.stringify(m)).join("\n") + "\n",
     encoding: "utf8",
     env: { ...process.env, HEADS_UP_HOME: DATA, HEADS_UP_DISABLED: "1" },
@@ -37,6 +40,31 @@ test("MCP server: initialize, list, call", () => {
   assert.equal(out[4].result.isError, true);
   assert.equal(out[5].error.code, -32601);
   assert.deepEqual(out[6].result, {});
+});
+
+test("MCP server: `headsup serve` (what the MCP registry's npx entry runs) is the same server, with nothing else on stdout", () => {
+  const out = rpcVia(
+    [CLI, "serve"],
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "tools/list" },
+    { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "notify_user", arguments: { status: "completed" } } },
+  );
+  assert.deepEqual(Object.keys(out), ["1", "2", "3"]);
+  assert.equal(out[1].result.serverInfo.name, "heads-up");
+  assert.equal(out[2].result.tools[0].name, "notify_user");
+  assert.match(out[3].result.content[0].text, /^Not played: disabled by HEADS_UP_DISABLED=1/);
+});
+
+test("Release: one version everywhere, and the registry entry matches the npm package", () => {
+  const pkg = json("package.json");
+  const reg = json("server.json");
+  const init = rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })[1].result;
+  const versions = [json(".claude-plugin/plugin.json").version, json(".codex-plugin/plugin.json").version, init.serverInfo.version, reg.version, reg.packages[0].version];
+  assert.deepEqual(versions, versions.map(() => pkg.version));
+  assert.equal(reg.name, pkg.mcpName); // the registry checks this field in the published package
+  assert.equal(reg.packages[0].identifier, pkg.name);
+  assert.deepEqual(reg.packages[0].packageArguments, [{ type: "positional", value: "serve" }]);
+  assert.ok(reg.description.length <= 100);
 });
 
 test("MCP server: bad JSON gets a parse error, not a crash", () => {
