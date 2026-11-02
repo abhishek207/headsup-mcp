@@ -97,7 +97,7 @@ headsup local install   # download the free local voice; headsup local remove
 A free voice that runs on your Mac, for people who want project names and Claude's own words without paying for a key. It's off until you download it: click Download on the settings page (or run `headsup local install`), then pick one of its 12 voices under Voice, "On this Mac".
 
 - **What it is:** [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), an 82-million-parameter text-to-speech model, run by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Heads-up downloads both from their official releases (about 140 MB), checks each file against a pinned checksum, and keeps about 200 MB in the data folder. Nothing is installed anywhere else.
-- **What it costs:** nothing per line. There's no daily budget and no limit on new project names. It uses your CPU for a moment each time it records a new line; lines already made are cached and play instantly.
+- **What it costs:** nothing per line. There's no daily budget and no limit on new project names. It uses your CPU for a moment each time it records a new line: on an M4 MacBook Air, 3 to 5 seconds and about 500 MB of memory, freed as soon as the line is made. Nothing stays loaded between alerts, and lines already made are cached and play instantly.
 - **Voices:** 6 American, 4 British, 2 Indian (a Hindi voice reading English). For a native Indian English voice use Sarvam with your key.
 - **Keys still work:** the local voice is one more choice next to ElevenLabs and Sarvam. If you'd rather not run a model on your Mac, skip it and use a key.
 - `headsup local remove` deletes it. If you have no key, project names and Claude's own words switch off again.
