@@ -21,10 +21,10 @@
 // Where the plugin comes from: --source <path|owner/repo>, else this checkout, else GitHub.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { DATA, HELPER, ROOT, rememberRoot } from "../paths.mjs";
 import { has, which } from "../platform/common.mjs";
 import { secretDeleteHint, secretRead, words } from "../platform/index.mjs";
@@ -54,6 +54,8 @@ export function withHeadsUp(settings) {
 export function withoutHeadsUp(settings) {
   const s = structuredClone(settings ?? {});
   if (s.permissions?.allow) s.permissions.allow = s.permissions.allow.filter((r) => r !== TOOL_RULE && r !== OLD_TOOL_RULE);
+  if (s.permissions?.allow?.length === 0) delete s.permissions.allow;
+  if (s.permissions && !Object.keys(s.permissions).length) delete s.permissions;
   for (const [event, groups] of Object.entries(s.hooks ?? {})) {
     if (!Array.isArray(groups)) continue;
     const kept = groups
@@ -356,4 +358,13 @@ function linuxTools() {
   return lines;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+// Run only when started directly. import.meta.url has symlinks resolved (macOS /var is
+// /private/var) and argv[1] doesn't, so compare real paths.
+const startedDirectly = () => {
+  try {
+    return Boolean(process.argv[1]) && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+};
+if (startedDirectly()) await main();
