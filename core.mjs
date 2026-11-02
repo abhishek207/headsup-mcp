@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { DATA, HELPER as MEDIA_HELPER, ROOT } from "./paths.mjs";
-import { Skip, cleanMessage, compose, costOf, voiceInfo } from "./speech.mjs";
+import { Skip, cleanMessage, compose, composeStream, costOf, streamable, voiceInfo } from "./speech.mjs";
 import { LOCAL_VOICES } from "./local.mjs";
 import { VOICE_PROVIDERS, cachedSegment, segKey } from "./tts.mjs";
 
@@ -445,7 +445,9 @@ export async function withPlayLock(fn, { waitMs = 180_000 } = {}) { // long enou
   }
 }
 
-const play = (files, c, requested) =>
+// items: clip paths and pauses (ms), played in order; an async iterable when a long
+// line is still being made.
+const play = (items, c, requested) =>
   withPlayLock(async (remember) => {
     let before = null;
     try {
@@ -459,14 +461,52 @@ const play = (files, c, requested) =>
           await setVolume(vol, false);
         }
       }
-      for (const [i, f] of files.entries()) {
-        if (i) await sleep(300);
-        await run("afplay", [f]);
+      for await (const item of items) {
+        if (typeof item === "number") await sleep(item);
+        else await run("afplay", [item]);
       }
     } finally {
       if (before) await setVolume(before.vol, before.muted).catch(() => {});
     }
   });
+
+// What one alert plays: the chime, then the clip (or a long line's pieces as they're
+// made), repeated with 300 ms between.
+async function* sequence(p, times, chime) {
+  if (chime) yield* [CHIME, 300];
+  let file = p.file;
+  if (p.stream) {
+    yield* p.stream;
+    file = await p.done.catch(() => null); // the whole line, for repeats
+  } else yield file;
+  for (; file && times > 1; times--) yield* [300, file];
+}
+
+// Pieces handed from the recorder to the player as they're made: push() adds one, end()
+// says there are no more, and iterating waits for each.
+function feed() {
+  const items = [];
+  let ended = false;
+  let wake = null;
+  return {
+    used: false,
+    push(x) {
+      items.push(x);
+      wake?.();
+    },
+    end() {
+      ended = true;
+      wake?.();
+    },
+    async *[Symbol.asyncIterator]() {
+      for (;;) {
+        if (items.length) yield items.shift();
+        else if (ended) return;
+        else await new Promise((ok) => (wake = ok));
+      }
+    },
+  };
+}
 
 // Project names: "Hello from Kosh. I need your review."
 const SEGMENTS = join(DATA, "segments");
@@ -536,7 +576,9 @@ export const textFor = (status, c = loadConfig()) => c.wording[status] ?? TEMPLA
 // Anything that needs recording uses the user's key and, unless force, the daily budget.
 // The local voice needs neither, so it has no daily cap on new names either.
 // note says why the first choice wasn't possible ("no ElevenLabs key").
-export async function prepare(voice, status, { project = null, message = null, force = false, kind = null } = {}, c = loadConfig()) {
+// stream (a feed from alert): lets a long local line start playing after its first sentence;
+// the result then has stream (the pieces) and done (the finished clip) instead of file.
+export async function prepare(voice, status, { project = null, message = null, force = false, kind = null, stream = null } = {}, c = loadConfig()) {
   const t = TEMPLATES.find((x) => x.id === status);
   const builtin = findClip(voice, status); // null for library voices
   const fallback = builtin ?? clipFor(voiceInfo(voice, c)?.fallback ?? FALLBACK_VOICE, status);
@@ -559,8 +601,24 @@ export async function prepare(voice, status, { project = null, message = null, f
     for (const g of greetings) {
       const line = `${g.greet} ${m.text}`;
       if (g.greetTrack && m.msgTrack) return { file: builtin, line, live: false, note };
+      const o = { ...g, ...m, budget, kind: kindOf(g, m) };
+      if (stream && !stream.used && m.live && streamable(voice, c, o)) {
+        stream.used = true; // one try: a failure falls back to the clips below
+        let started;
+        const first = new Promise((ok) => (started = ok));
+        let playing = false;
+        const done = composeStream(voice, c, o, (x) => ((playing = true), started(), stream.push(x))).finally(() => stream.end());
+        done.catch(() => {}); // a failure after playback started just ends the line early
+        try {
+          await Promise.race([first, done]);
+          if (playing) return { stream, done, line, live: true, note };
+        } catch (e) {
+          note ??= `recording failed (${String(e.message).slice(0, 120)})`;
+          continue;
+        }
+      }
       try {
-        const file = await compose(voice, c, { ...g, ...m, budget, kind: kindOf(g, m) });
+        const file = await compose(voice, c, o);
         return { file, line, live: Boolean(m.live), note };
       } catch (e) {
         note ??= e instanceof Skip ? e.message : `recording failed (${String(e.message).slice(0, 120)})`;
@@ -616,7 +674,8 @@ export function alert(status, { repeat = 1, volume, force = false, source = "cla
   const vol = Number.isFinite(volume) ? Math.min(100, Math.max(0, volume)) : undefined;
   const times = clamp(repeat, 1, 3, 1);
   // Recording starts now, in parallel with any alert still playing; playback waits its turn.
-  const prepared = prepare(useVoice, status, { project, message: said, force }, c).catch((e) => ({
+  const stream = feed();
+  const prepared = prepare(useVoice, status, { project, message: said, force, stream }, c).catch((e) => ({
     file: clipFor(FALLBACK_VOICE, status),
     line: STATUSES[status],
     live: false,
@@ -624,9 +683,8 @@ export function alert(status, { repeat = 1, volume, force = false, source = "cla
   }));
   queue = queue
     .then(async () => {
-      const { file } = await prepared;
-      const files = [...(c.chime && existsSync(CHIME) ? [CHIME] : []), ...Array(times).fill(file)];
-      await play(files, c, vol);
+      const p = await prepared;
+      await play(sequence(p, times, c.chime && existsSync(CHIME)), c, vol);
     })
     .catch((e) => process.stderr.write(`heads-up: ${e.message}\n`));
   const greet = namesProject(project, c) ? projectGreeting(project, c) : greeting;

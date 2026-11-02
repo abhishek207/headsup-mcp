@@ -262,7 +262,8 @@ export async function installLocal({ model = DEFAULT_MODEL, sources, onProgress 
     writeFileSync(INSTALLED, JSON.stringify(record, null, 2) + "\n");
     step("checking", total);
     if (process.env.HEADS_UP_FAKE_TTS !== "1") {
-      const { stats } = await runSpeak(LOCAL_VOICES[0], CHECK_LINE);
+      const { stats, dir } = await runSpeak(LOCAL_VOICES[0], [CHECK_LINE]);
+      rmSync(dir, { recursive: true, force: true });
       writeFileSync(INSTALLED, JSON.stringify({ ...record, measured: stats }, null, 2) + "\n");
     }
   } catch (e) {
@@ -315,44 +316,67 @@ const reason = (stderr) => {
 };
 
 // Speaks text in a local voice and returns the WAV. Throws if the voice isn't installed,
-// the engine fails, or it takes longer than 30 seconds.
+// the engine fails, or it takes too long (see speakTimeout).
 export async function speakLocal(voiceId, text, speed = 1) {
+  const { files, dir } = await speakLocalParts(voiceId, [text], speed);
+  try {
+    return readFileSync(files[0]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// Speaks several pieces (a script's sentences) in one child process, so the model loads
+// once, calling onPart(file, i) as each WAV is ready: a long script can start playing
+// after its first sentence. Resolves to { files, dir, stats }; the caller removes dir.
+export async function speakLocalParts(voiceId, texts, speed = 1, onPart = () => {}) {
   const v = LOCAL_VOICES.find((x) => x.id === voiceId);
   if (!v) throw new Error(`unknown local voice ${voiceId}`);
   if (!localReady()) throw new Error("the local voice isn't downloaded");
-  return (await runSpeak(v, text, speed)).wav;
+  return runSpeak(v, texts, speed, onPart);
 }
 
-// One line in a fresh child process: { wav, stats: { memory (peak MB), seconds (start to
-// finish, model load included: what an alert waits for) } }.
-function runSpeak(v, text, speed = 1) {
+// The pieces in a fresh child process: { files, dir, stats: { memory (peak MB), seconds
+// (start to finish, model load included: what an alert waits for) } }.
+function runSpeak(v, texts, speed = 1, onPart = () => {}) {
   const file = MODELS[installedModel()]?.file;
   return withSpeakLock(
     () =>
       new Promise((resolve, reject) => {
-        const out = join(LOCAL_DIR, `line-${process.pid}-${Date.now()}.wav`);
+        const dir = join(LOCAL_DIR, `line-${process.pid}-${Date.now()}`);
+        mkdirSync(dir, { recursive: true });
+        const outs = texts.map((_, i) => join(dir, `${i}.wav`));
         const env = { ...process.env, DYLD_LIBRARY_PATH: ENGINE_DIR, LD_LIBRARY_PATH: ENGINE_DIR };
         const start = Date.now();
         const p = spawn(process.execPath, [fileURLToPath(import.meta.url), "speak"], { env, stdio: ["pipe", "pipe", "pipe"] });
         let err = "";
-        let said = "";
-        p.stdout.on("data", (d) => (said = (said + d).slice(-500)));
-        p.stderr.on("data", (d) => (err = (err + d).slice(-2000)));
-        const timer = setTimeout(() => p.kill("SIGKILL"), speakTimeout(text));
-        p.on("error", (e) => (clearTimeout(timer), reject(e)));
-        p.on("close", (code, signal) => {
-          clearTimeout(timer);
-          try {
-            if (code !== 0) throw new Error(signal ? "the local voice took too long" : `the local voice failed: ${reason(err) || `exit ${code}`}`);
-            const memory = Number(JSON.parse(said.trim().split("\n").pop() || "{}").memory) || null;
-            resolve({ wav: readFileSync(out), stats: { memory, seconds: Math.round((Date.now() - start) / 100) / 10 } });
-          } catch (e) {
-            reject(e);
-          } finally {
-            rmSync(out, { force: true });
+        let buf = "";
+        let memory = null;
+        p.stdout.on("data", (d) => {
+          buf += d;
+          let nl;
+          while ((nl = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, nl);
+            buf = buf.slice(nl + 1);
+            try {
+              const m = JSON.parse(line);
+              if (Number.isInteger(m.part) && outs[m.part]) onPart(outs[m.part], m.part);
+              if (m.memory) memory = Number(m.memory) || null;
+            } catch {
+              // not ours
+            }
           }
         });
-        p.stdin.end(JSON.stringify({ text, sid: v.sid, british: v.id.startsWith("b"), file, out, speed }));
+        p.stderr.on("data", (d) => (err = (err + d).slice(-2000)));
+        const timer = setTimeout(() => p.kill("SIGKILL"), speakTimeout(texts.join(" ")));
+        p.on("error", (e) => (clearTimeout(timer), rmSync(dir, { recursive: true, force: true }), reject(e)));
+        p.on("close", (code, signal) => {
+          clearTimeout(timer);
+          if (code === 0 && outs.every((o) => existsSync(o))) return resolve({ files: outs, dir, stats: { memory, seconds: Math.round((Date.now() - start) / 100) / 10 } });
+          rmSync(dir, { recursive: true, force: true });
+          reject(new Error(signal ? "the local voice took too long" : `the local voice failed: ${reason(err) || `exit ${code}`}`));
+        });
+        p.stdin.end(JSON.stringify({ texts, sid: v.sid, british: v.id.startsWith("b"), file, outs, speed }));
       }),
   );
 }
@@ -370,9 +394,13 @@ function speakMain() {
     lang: job.british ? "en" : "en-us", // espeak-ng's "en" is British English
   };
   const tts = sherpa.createOfflineTts({ model: { kokoro, numThreads: THREADS, provider: "cpu", debug: 0 }, maxNumSentences: 1 });
-  const audio = sherpa.offlineTtsGenerate(tts, { text: job.text, sid: job.sid, speed: Math.min(1.5, Math.max(0.7, Number(job.speed) || 1)) });
-  if (!audio?.samples?.length) throw new Error("no audio came back");
-  sherpa.writeWave(job.out, { samples: audio.samples, sampleRate: audio.sampleRate });
+  const speed = Math.min(1.5, Math.max(0.7, Number(job.speed) || 1));
+  for (const [i, text] of job.texts.entries()) {
+    const audio = sherpa.offlineTtsGenerate(tts, { text, sid: job.sid, speed });
+    if (!audio?.samples?.length) throw new Error("no audio came back");
+    sherpa.writeWave(job.outs[i], { samples: audio.samples, sampleRate: audio.sampleRate });
+    process.stdout.write(JSON.stringify({ part: i }) + "\n"); // the parent can play it now
+  }
   // Peak memory of this process, for the settings page (maxRSS is in kilobytes).
   process.stdout.write(JSON.stringify({ memory: Math.round(process.resourceUsage().maxRSS / 1024) }) + "\n");
 }

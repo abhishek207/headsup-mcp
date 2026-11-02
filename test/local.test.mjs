@@ -181,6 +181,34 @@ test("local voice speed: clamped to 0.7–1.5 in steps of 0.05, and each speed k
     assert.equal((await prepare("local-am_michael", "input", { message: msg }, at(1))).file, normal.file, "back at 1x, the first recording is reused");
   }));
 
+test("local voice: a long line starts playing after its first sentence, then is cached whole", needsFfmpeg, () =>
+  withTts(async () => {
+    const { sentences } = await import("../speech.mjs");
+    assert.deepEqual(sentences("Done. The checkout fix is ready, e.g. the cart page and the tax rules. Should I merge it now, or wait for you?"), [
+      "Done. The checkout fix is ready, e.g. the cart page and the tax rules.",
+      "Should I merge it now, or wait for you?",
+    ]);
+    const c = normalize({ ...optedIn, custom_voices: [{ provider: "local", provider_id: "am_michael" }], voice: "local-am_michael" });
+    const got = [];
+    let ended = false;
+    const stream = { used: false, push: (x) => got.push(x), end: () => (ended = true) };
+    const msg = "The streaming test is finished, and every piece arrived in order. I need you to listen and tell me whether the pauses sound natural.";
+    const p = await prepare("local-am_michael", "input", { project: "kosh", message: msg, stream }, c);
+    assert.equal(p.live, true);
+    assert.equal(p.stream, stream);
+    assert.ok(got.length >= 2 && typeof got[0] === "string" && got[1] === 600, "greeting, then the pause");
+    const file = await p.done;
+    assert.ok(ended);
+    const pieces = got.filter((x) => typeof x === "string");
+    assert.equal(pieces.length, 1 + sentences(msg).length);
+    for (const f of pieces) assert.ok(existsSync(f), `piece ${f}`);
+    assert.match(file, /cache\/clips\/local-am_michael\//);
+    const again = await prepare("local-am_michael", "input", { project: "kosh", message: msg, stream: { used: false, push() {}, end() {} } }, c);
+    assert.equal(again.file, file, "the second time it's one cached clip, not a stream");
+    const short = await prepare("local-am_michael", "input", { message: "Just one sentence here.", stream: { used: false, push: () => assert.fail("streamed"), end() {} } }, c);
+    assert.equal(short.live, true);
+  }));
+
 test("local voice: Claude can say much more than with a paid voice", () => {
   const c = normalize({ ...quiet, live: { enabled: true, max_chars: 160 }, custom_voices: [{ provider: "local", provider_id: "am_michael" }], voice: "local-am_michael" });
   assert.equal(c.local.max_chars, 1000);

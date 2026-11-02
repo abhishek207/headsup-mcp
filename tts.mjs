@@ -7,10 +7,11 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { LOCAL_VOICES, localReady, speakLocal } from "./local.mjs";
-import { ROOT } from "./paths.mjs";
+import { LOCAL_VOICES, localReady, speakLocal, speakLocalParts } from "./local.mjs";
+import { DATA, ROOT } from "./paths.mjs";
+const STREAM_DIR = join(DATA, "cache", "stream"); // pieces of lines being streamed
 
 // MCP servers and hooks can start with a minimal PATH; make system tools and Homebrew findable.
 process.env.PATH = [...new Set([...(process.env.PATH ?? "").split(":").filter(Boolean), "/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"])].join(":");
@@ -233,6 +234,36 @@ export function joinClips(greetFile, msgFile, out) {
     `[0:a]${fmt},${trim}[g];[1:a]${fmt},${trim}[m];anullsrc=r=44100:cl=mono,atrim=0:${PAUSE_S}[p];[g][p][m]concat=n=3:v=0:a=1,loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur=0.15[o]`,
     "-map", "[o]", "-ar", "44100", "-ac", "1", "-b:a", "128k", out,
   ]);
+}
+
+export const PAUSE_MS = PAUSE_S * 1000;
+
+// One piece of a streamed line, at the same loudness as a finished clip (WAV).
+export function levelClip(file, out) {
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", file, "-af", "aresample=44100,loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "44100", "-ac", "1", "-c:a", "pcm_s16le", out]);
+}
+
+// Pieces of one recording back to back, as WAV (a streamed line's sentences).
+export function concatClips(files, out) {
+  const inputs = files.flatMap((f) => ["-i", f]);
+  const labels = files.map((_, i) => `[${i}:a]aresample=24000,aformat=sample_fmts=fltp:channel_layouts=mono[a${i}]`).join(";");
+  const filter = `${labels};${files.map((_, i) => `[a${i}]`).join("")}concat=n=${files.length}:v=0:a=1[o]`;
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...inputs, "-filter_complex", filter, "-map", "[o]", "-c:a", "pcm_s16le", out]);
+}
+
+// Several pieces in a local voice from one model load, each handed to onPart(file, i) as
+// soon as it's ready: { files, dir } (the caller removes dir). Fake TTS makes tones.
+export async function localParts(voiceId, texts, speed, onPart) {
+  if (!fake()) return speakLocalParts(voiceId, texts, speed, onPart);
+  const dir = join(STREAM_DIR, `fake-${process.pid}-${Date.now()}`);
+  mkdirSync(dir, { recursive: true });
+  const files = [];
+  for (const [i, t] of texts.entries()) {
+    files.push(join(dir, `${i}.wav`));
+    writeFileSync(files[i], tone(0.2 + t.length / 40));
+    onPart(files[i], i);
+  }
+  return { files, dir };
 }
 
 // Where a built-in track's 0.6s gap starts and ends.

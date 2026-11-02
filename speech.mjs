@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DATA } from "./paths.mjs";
-import { PROVIDERS, PROVIDER_NAMES, VOICES, cachedSegment, extractGreeting, extractMessage, hasKey, joinClips, segKey, synth } from "./tts.mjs";
+import { PAUSE_MS, PROVIDERS, PROVIDER_NAMES, VOICES, cachedSegment, concatClips, extractGreeting, extractMessage, hasKey, joinClips, levelClip, localParts, segKey, synth } from "./tts.mjs";
 
 const SEGMENTS = join(DATA, "segments");
 const CLIPS = join(DATA, "cache", "clips");
@@ -151,6 +151,73 @@ export async function compose(voice, c, o) {
   joinClips(g, m, out);
   if (o.msgId === "live") {
     prune(join(SEGMENTS, voice), "live-");
+    prune(dirname(out), "live-");
+  }
+  return out;
+}
+
+// A script's sentences, for playing a long local line while the rest is being made.
+// A short sentence is joined to the next so the speech doesn't sound chopped.
+export function sentences(text) {
+  const out = [];
+  for (const s of text.split(/(?<!\b(?:e\.g|i\.e|vs|Mr|Mrs|Ms|Dr)\.)(?<=[.!?][)"'\]”’]*)\s+/).map((x) => x.trim()).filter(Boolean)) {
+    if (out.length && out[out.length - 1].length < 40) out[out.length - 1] += " " + s;
+    else out.push(s);
+  }
+  return out;
+}
+
+// Whether a line can be streamed: Claude's own words in the local voice, not made yet,
+// and longer than one sentence.
+export const streamable = (voice, c, o) =>
+  voiceInfo(voice, c)?.provider === "local" && !composed(voice, o, c) && hasKey("local") && sentences(o.text).length > 1;
+
+const STREAM = join(DATA, "cache", "stream");
+// Like compose, for a long line in the local voice: the model makes it sentence by sentence
+// and push() gets each piece as soon as it's ready (WAVs at clip loudness, with the 0.6 s
+// pause as a number of ms), so playback starts after the first sentence instead of the last.
+// Resolves to the finished clip, cached like any other. The pieces stay until the next
+// stream, ten minutes on, since they may still be playing.
+export async function composeStream(voice, c, o, push) {
+  const speed = speedOf(voice, c);
+  const info = voiceInfo(voice, c);
+  const out = clipPath(voice, { ...o, speed });
+  const dir = join(SEGMENTS, voice);
+  const greetKey = keyOf(o.greetId, o.greet, false, speed);
+  const msgKey = keyOf(o.msgId, o.text, o.fast, speed);
+  mkdirSync(STREAM, { recursive: true });
+  for (const d of readdirSync(STREAM)) {
+    const p = join(STREAM, d);
+    if (Date.now() - statSync(p).mtimeMs > 600_000) rmSync(p, { recursive: true, force: true });
+  }
+  const tmp = join(STREAM, `play-${process.pid}-${Date.now()}`);
+  mkdirSync(tmp, { recursive: true });
+  let n = 0;
+  const send = (file) => {
+    const f = join(tmp, `${n++}.wav`);
+    levelClip(file, f);
+    push(f);
+  };
+  const greetHit = cachedSegment(dir, greetKey);
+  if (greetHit) (send(greetHit), push(PAUSE_MS));
+  const texts = [...(greetHit ? [] : [o.greet]), ...sentences(o.text)];
+  const { files, dir: made } = await localParts(info.provider_id, texts, speed, (file, i) => {
+    send(file);
+    if (!greetHit && i === 0) push(PAUSE_MS);
+  });
+  try {
+    mkdirSync(dir, { recursive: true });
+    const greetSeg = greetHit ?? join(dir, `${greetKey}.wav`);
+    if (!greetHit) renameSync(files[0], greetSeg);
+    const msgSeg = join(dir, `${msgKey}.wav`);
+    concatClips(files.slice(greetHit ? 0 : 1), msgSeg);
+    mkdirSync(dirname(out), { recursive: true });
+    joinClips(greetSeg, msgSeg, out);
+  } finally {
+    rmSync(made, { recursive: true, force: true });
+  }
+  if (o.msgId === "live") {
+    prune(dir, "live-");
     prune(dirname(out), "live-");
   }
   return out;
