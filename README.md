@@ -10,7 +10,7 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 
 - **20 alerts** in **7 voices** (American, British, Australian and Indian; male and female), 140 built-in clips. No API key needed for these.
 - **Works without a key**: out of the box it plays the built-in clips ("Hello. I need your review."). Project names and Claude's own words are opt-in features that switch on once you download the local voice or add your own ElevenLabs or Sarvam key.
-- **Local voice** (free, optional): a 140 MB download that speaks on your Mac with no key and no account. 12 voices (American, British and Indian English), no daily limit. See [Local voice](#local-voice).
+- **Local voice** (free, optional): a 360 MB download that speaks on your Mac with no key and no account. 12 voices (American, British and Indian English), no daily limit. See [Local voice](#local-voice).
 - **Project names** (local voice or your key): "Hello from Brand Bakery Hub." Each project's name is recorded once, then cached.
 - **Claude's own words** (local voice or your key): when a fixed line doesn't say enough, Claude adds a short `message` ("The migration ran, but two tables need your review.") and it's spoken live. Lines are cleaned (no code or links), capped in length and cached. With a key they also count against a daily character budget. If it can't be recorded, the regular alert plays.
 - **Any voice from your provider** (your key): add voices from your ElevenLabs account or any of Sarvam's 37 speakers on the settings page. Alerts in that voice are recorded the first time each plays, or all at once.
@@ -30,7 +30,7 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 - macOS, Node.js 20+, Claude Code (or Codex)
 - Xcode Command Line Tools (`swiftc`) to build the microphone checker
 - `ffmpeg` (Homebrew) for anything recorded, with the local voice or your key
-- Optional: the local voice (about 200 MB of disk), or an ElevenLabs and/or Sarvam API key, only for recording new lines
+- Optional: the local voice (about 420 MB of disk), or an ElevenLabs and/or Sarvam API key, only for recording new lines
 
 ## Install
 
@@ -96,8 +96,8 @@ headsup local install   # download the free local voice; headsup local remove
 
 A free voice that runs on your Mac, for people who want project names and Claude's own words without paying for a key. It's off until you download it: click Download on the settings page (or run `headsup local install`), then pick one of its 12 voices under Voice, "On this Mac".
 
-- **What it is:** [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), an 82-million-parameter text-to-speech model, run by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Heads-up downloads both from their official releases (about 140 MB), checks each file against a pinned checksum, and keeps about 200 MB in the data folder. Nothing is installed anywhere else.
-- **What it costs:** nothing per line. There's no daily budget and no limit on new project names. It uses your CPU for a moment each time it records a new line: on an M4 MacBook Air, 3 to 5 seconds and about 500 MB of memory, freed as soon as the line is made. Nothing stays loaded between alerts, and lines already made are cached and play instantly.
+- **What it is:** [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), an 82-million-parameter text-to-speech model, run by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Heads-up downloads both from their official releases (about 360 MB), checks each file against a pinned checksum, and keeps about 420 MB in the data folder. Nothing is installed anywhere else.
+- **What it costs:** nothing per line. There's no daily budget and no limit on new project names. It uses your CPU for a moment each time it records a new line: on an M4 MacBook Air, 2 to 3 seconds and about 750 MB of memory, freed as soon as the line is made. Nothing stays loaded between alerts, and lines already made are cached and play instantly.
 - **Voices:** 6 American, 4 British, 2 Indian (a Hindi voice reading English). For a native Indian English voice use Sarvam with your key.
 - **Keys still work:** the local voice is one more choice next to ElevenLabs and Sarvam. If you'd rather not run a model on your Mac, skip it and use a key.
 - `headsup local remove` deletes it. If you have no key, project names and Claude's own words switch off again.

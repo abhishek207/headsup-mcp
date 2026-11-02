@@ -951,7 +951,7 @@ function renderLocal() {
     controls = '<button class="btn" data-local-pick>Choose a voice</button><button class="btn" data-local-remove>Remove</button>';
   } else {
     title = "Download the local voice";
-    desc = (L.error ? "The last download stopped: " + L.error + ". " : "") + "A " + mb(L.download) + " download, about " + mb(L.disk) + " on disk. Then it's free to use as much as you like. Making a new line takes a few seconds and about 500 MB of memory, freed right after.";
+    desc = (L.error ? "The last download stopped: " + L.error + ". " : "") + "A " + mb(L.download) + " download, about " + mb(L.disk) + " on disk. Then it's free to use as much as you like. Making a new line takes a few seconds and about 750 MB of memory, freed right after.";
     controls = `<button class="btn primary" data-local-install>${L.error ? "Try again" : "Download"}</button>`;
   }
   $("#localBox").innerHTML = `<div class="row"><div class="text"><div class="title">${esc(title)}</div><div class="desc">${esc(desc)}</div></div><div class="controls">${controls}</div></div>`;

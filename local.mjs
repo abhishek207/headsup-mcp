@@ -32,18 +32,20 @@ const ENGINE = {
   // Not a supported platform for Heads-up; here so the voice can be tested on Linux.
   "linux-x64": { url: "https://registry.npmjs.org/sherpa-onnx-linux-x64/-/sherpa-onnx-linux-x64-1.13.8.tgz", hash: "sha512-6plnhjagsSeTntCgnlag86hWbs/uZE9Crms1LgOb68/1nKsIQjMd+WG519m+aPwT6TrsBOiEMzrx41t8sL5L5g==", bytes: 11_089_653 },
 };
-// Kokoro v1.0 as sherpa-onnx packages it (int8 weights; same 54 voices as the full model).
+// Kokoro v1.0 as sherpa-onnx packages it, full precision. The int8 build is a third of the
+// size but audibly rough (buzzy between the harmonics), and on Apple silicon it's about half
+// as fast, so the full model is worth the bigger download.
 const MODEL = {
-  name: "kokoro-int8-multi-lang-v1_0",
-  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2",
-  hash: "sha256-csNHIwEH74oxCY7E1GimBSRL7vXx7QDbl++hNRiABlM=",
-  bytes: 132_353_410,
-  file: "model.int8.onnx",
+  name: "kokoro-multi-lang-v1_0",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",
+  hash: "sha256-YHA3B7wFzNSNYOHrcj84sH1uR0eVoLaliNciBADg96Q=",
+  bytes: 349_886_476,
+  file: "model.onnx",
 };
 export const PINNED = { engine: ENGINE.version, model: MODEL.name, file: MODEL.file };
 // The Chinese text front end isn't needed for English voices (about 17 MB).
 const UNUSED = ["dict", "lexicon-zh.txt", "date-zh.fst", "number-zh.fst", "phone-zh.fst"];
-export const DISK_BYTES = 200_000_000; // engine 34 MB + model 166 MB, rounded up
+export const DISK_BYTES = 420_000_000; // engine 33 MB + model 384 MB, rounded up
 
 const platform = `${process.platform}-${process.arch}`;
 export const defaultSources = () => ({ engine: ENGINE[platform] ?? null, model: MODEL });

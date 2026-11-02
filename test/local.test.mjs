@@ -34,7 +34,7 @@ before(async () => {
   execFileSync("tar", ["-czf", join(FIX, "engine.tgz"), "-C", join(FIX, "e"), "package"]);
   const m = join(FIX, "m", "kokoro-test");
   mkdirSync(join(m, "dict"), { recursive: true });
-  for (const f of ["model.int8.onnx", "voices.bin", "tokens.txt", "lexicon-us-en.txt", "lexicon-zh.txt", "dict/jieba.dict"]) writeFileSync(join(m, f), f);
+  for (const f of [local.PINNED.file, "voices.bin", "tokens.txt", "lexicon-us-en.txt", "lexicon-zh.txt", "dict/jieba.dict"]) writeFileSync(join(m, f), f);
   execFileSync("tar", ["-cjf", join(FIX, "model.tar.bz2"), "-C", join(FIX, "m"), "kokoro-test"]);
   server = createServer((req, res) => {
     const file = join(FIX, req.url.slice(1));
