@@ -46,7 +46,7 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 
 `headsup install` checks all of this and says what's missing. On Linux it prints the install line for your distribution (apt, dnf, pacman, zypper); no helper needs building. On Windows it builds the small helper with the C# compiler that ships with Windows (.NET Framework 4), so nothing extra is downloaded. Anything Heads-up can't see is reported on the settings page and by `headsup status`, never treated as "not on a call".
 
-Linux and Windows support is new in 1.6.0. Over SSH, in a container or on a machine with no sound server, alerts are skipped with a reason instead of playing into nothing.
+Linux and Windows support is new in 1.6.0. Linux has been tested on PipeWire with GNOME's Do Not Disturb; other desktops are best effort. Windows is early: it hasn't run on a real PC yet, so if something doesn't work there, please open an issue. Over SSH, in a container or on a machine with no sound server, alerts are skipped with a reason instead of playing into nothing.
 
 ## Install
 
