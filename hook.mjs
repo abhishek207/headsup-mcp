@@ -75,6 +75,7 @@ function play(id) {
   spawn(process.execPath, [fileURLToPath(import.meta.url), "--play", id, `hook:${event}`, projectFor(input.cwd) ?? ""], {
     detached: true,
     stdio: "ignore",
+    windowsHide: true,
     env: process.env,
   }).unref();
 }

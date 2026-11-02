@@ -1,6 +1,6 @@
 # Heads-up: working notes for Claude
 
-Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak short alerts ("Hello from Kosh. I need your review."). Zero npm dependencies, plain Node ESM, one small Swift helper. User-facing docs: `README.md`.
+Claude Code / Codex plugin (local MCP server + skill + hooks for macOS, Linux and Windows) that speak short alerts ("Hello from Kosh. I need your review."). Zero npm dependencies, plain Node ESM, a small Swift helper on macOS and a small C# helper on Windows. User-facing docs: `README.md`.
 
 ## Map
 
@@ -10,10 +10,11 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 | `.codex-plugin/` | Codex manifest + `mcp.json`. Kept out of the repo root so Claude Code doesn't load it as a project `.mcp.json`. |
 | `skills/heads-up/SKILL.md` | Teaches the agent when/how to call `notify_user`. Replaces the old CLAUDE.md section. Provider-neutral wording. |
 | `hooks/hooks.json`, `hooks/codex.json` | Plugin hooks → `hook.mjs`. Codex has `PermissionRequest` instead of `Notification`. |
-| `paths.mjs` | `ROOT` (code + built-in voices; the plugin cache copy when installed), `DATA` (`~/Library/Application Support/heads-up` or `$HEADS_UP_HOME`), `HELPER` (call detector, `DATA/bin` first). Writes `DATA/root` so the `headsup` shim finds the current copy. |
+| `paths.mjs` | `ROOT` (code + built-in voices; the plugin cache copy when installed), `DATA` (`$HEADS_UP_HOME`, else `defaultData()`: `~/Library/Application Support/heads-up`, `$XDG_DATA_HOME/heads-up` or `~/.local/share/heads-up`, `%LOCALAPPDATA%\heads-up`), `HELPER` (`media-in-use` on macOS, `headsup-win.exe` on Windows, null on Linux; `DATA/bin` first). Writes `DATA/root` so the `headsup` shim finds the current copy. |
+| `platform/` | The only OS-specific code. `index.mjs` picks `darwin.mjs`, `linux.mjs` or `win32.mjs` and re-exports one interface (header lists it): `words` (UI and status wording: Focus vs Do Not Disturb, Keychain vs keyring), `chimes`, `extraPath`, `play`, `audioReady`, `getVolume`/`setVolume`, `outputDevice` (+ headphones guess), `mediaInUse`, `callsReady`/`callsSetup`, `focusReadable`/`activeFocus`/`focusUnreadable`, `idleSeconds`, `currentNetworks`, `secretRead`/`secretSave`/`secretDelete`/`secretDeleteHint`, `openUrl`. Parsers are exported pure functions with fixture tests. `common.mjs`: `has`/`which` (PATH lookup, no shell), `clamp`, `MAC`, `C_LOCALE`. |
 | `core.mjs` | Config defaults + `normalize()` (all clamping/validation), guardrails (`blockedReason`), detectors (location, idle, mic/camera, Focus), project names, volume safety, playback queue, `prepare()` (which clip and words, with fallbacks), `alert()`. |
 | `speech.mjs` | Recording beyond the built-in clips: `compose()` (greeting + 0.6 s + message, cached), `cleanMessage()`, daily budget, usage log (`DATA/usage.json`), library-voice lookup. |
-| `tts.mjs` | ElevenLabs/Sarvam synthesis with the user's own key (env → Keychain), voice lists (ElevenLabs account, Sarvam speakers), key check, plan usage, Keychain save/delete via `security -i`, ffmpeg join/extract. Also widens `PATH` for MCP/hook processes. |
+| `tts.mjs` | ElevenLabs/Sarvam synthesis with the user's own key (env → OS key store via `platform`), voice lists (ElevenLabs account, Sarvam speakers), key check, plan usage, key save/delete, ffmpeg join/extract. Also widens `PATH` for MCP/hook processes. |
 | `server.mjs` | MCP stdio server (hand-rolled JSON-RPC, async replies). One tool: `notify_user { status, message?, repeat?, volume? }`. Project = `projectFor(process.cwd())`. Waits up to 15 s for a live line so the answer says what was spoken. |
 | `hook.mjs` | Hook entry (Claude Code + Codex): UserPromptSubmit (turn start), Notification / PermissionRequest (→ `approval`), Stop (long turn → `completed`/`input`). Ignores background sessions. Plays in a detached child. Logs to `DATA/hook.log`. |
 | `settings.mjs` + `settings.html` | Local settings page on 127.0.0.1:4777 (host/origin/Sec-Fetch-Site checks, JSON-only POSTs, CSP with per-request script hashes, no framing). HTML is re-read per request. |
@@ -27,18 +28,19 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 | `tools/generate.mjs` | Rebuilds clips; caches raw segments in `DATA/segments` keyed by text hash so only changed text costs credits. `--dry-run` first, always. |
 | `test/*.test.mjs` | `npm test` (node:test, no deps): config clamps, guardrail order, Focus parsing, detector warnings, play lock, MCP server, hooks, live lines/wording/library voices/budget (fake TTS), message scrubbing, installer edits and quoting, settings server security (own port via `HEADS_UP_PORT`). Runs in a temp `HEADS_UP_HOME`, never plays audio, never reads or writes real keys. |
 | `tools/media-in-use.swift` | Builds `bin/media-in-use` (`npm run build`): prints `{"mic":bool,"camera":bool}` without opening devices. |
+| `tools/headsup-win.cs` | Windows helper, C# 5 so the `csc.exe` in every Windows 10/11 builds it (`headsup install`): audio (Core Audio volume, mute, device), play (MCI), media (CapabilityAccessManager ConsentStore), dnd (WNF state), idle, cred-read/write/delete (Credential Manager, secret on stdin). `npm run build:win` compile-checks it with Mono `mcs`. |
 
 ## Rules
 
-- Never write API keys to config, logs or the page. Keys come from env or Keychain only (`tts.mjs`).
+- Never write API keys to config, logs or the page. Keys come from env or the OS key store only (`tts.mjs` → `platform`: Keychain, Secret Service via `secret-tool`, Credential Manager). Secrets go to those tools on stdin, never as arguments. No key store on Linux means env only, never a file.
 - User data goes in `DATA`, never in the repo. `.gitignore` backs this up.
 - Project names and live lines are off by default and stay off without a provider key (`settings.mjs` enforces it).
 - Config is re-read on every call; every new field needs a default in `DEFAULTS` and a clamp/validation in `normalize()`.
 - Volume must stay under `HARD_CAP` (speakers 90, headphones 50). Unknown output device = headphone limits.
-- Playback goes through `withPlayLock` (`DATA/playing.lock`): one alert at a time across all sessions, and the volume to restore is saved in the lock so a crash can't leave the Mac loud.
+- Playback goes through `withPlayLock` (`DATA/playing.lock`): one alert at a time across all sessions, and the volume to restore is saved in the lock so a crash can't leave the computer loud.
 - A detector that can't see (helper not built, Focus file unreadable) must be reported by `detectorProblems()`, never silently treated as "not on a call".
 - A skipped alert is not an error: the tool returns "Not played: <reason>" and Claude must not retry.
-- Guardrail order in `blockedReason`: env kill switch → master switch → mute → per-alert switch → quiet hours → location lock → Focus → mic/camera → away (idle) → cooldown → hourly limit. `force` (tests) skips guardrails but never volume caps.
+- Guardrail order in `blockedReason`: env kill switch → master switch → no sound output (`platform.audioReady`: SSH, container, headless) → mute → per-alert switch → quiet hours → location lock → Focus → mic/camera → away (idle) → cooldown → hourly limit. `force` (tests) skips guardrails but never volume caps.
 - Live speech, edited wording, library voices and project names all go through `prepare()` → `compose()`: guardrails and volume caps apply as for any alert, automatic recording respects `live.daily_chars`, and every failure falls back to a built-in clip with a `note` (never an error).
 - A release bumps the version in `package.json`, both `plugin.json`, `serverInfo` in `server.mjs` and `server.json` (twice); a test fails if they differ. `headsup serve` must print nothing but JSON-RPC to stdout.
 - Spending: generating audio costs the user's credits. Dry-run, state the character count, and get a go-ahead before any batch. Project names are capped at 20 new names per day.
@@ -49,9 +51,12 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 
 ## Testing without noise
 
-- `npm test` before every commit. It runs on Linux too (macOS detectors just report "unavailable").
+- `npm test` before every commit. It runs on any platform; the test helpers set `HEADS_UP_ASSUME_AUDIO=1` so the no-sound-output guardrail doesn't hide the others.
+- New OS code goes in `platform/<os>.mjs` behind the shared interface, never in `core.mjs` or the UI. Parse command output in the C locale (`C_LOCALE()`), and put each parser in an exported function with a fixture test.
+- Linux has no helper to build: it uses `pactl`/`wpctl`, `pw-play`/`paplay`/`ffplay`, `pw-dump`, `gsettings`/`busctl`/`xfconf-query`/`dunstctl`/`swaync-client`/`makoctl`, `secret-tool`. Every one is optional; a missing one shows up in `detectorProblems()` or the installer, never as a crash.
+- Test Linux sound for real with a headless PipeWire (`pipewire`, `wireplumber`, `pipewire-pulse` and a null sink). Windows can't be run here: compile-check the helper with `mcs -langversion:5` and test its JS parsers with fixtures.
 - `HEADS_UP_DISABLED=1` makes every alert log "skipped" instead of playing.
-- `HEADS_UP_FAKE_TTS=1` makes synthesis return a short tone instead of calling a provider (no credits); `HEADS_UP_NO_KEYCHAIN=1` ignores Keychain keys. The test helpers set both up so tests can never spend.
+- `HEADS_UP_FAKE_TTS=1` makes synthesis return a short tone instead of calling a provider (no credits); `HEADS_UP_NO_KEYCHAIN=1` ignores key store keys on every platform. The test helpers set both up so tests can never spend.
 - MCP smoke test: `printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"notify_user","arguments":{"status":"completed"}}}' | HEADS_UP_DISABLED=1 node server.mjs`
 - Hooks: pipe event JSON into `node hook.mjs` (see `hook.log`). Headless sessions have `CLAUDE_CODE_SESSION_ATTENDED=0` and are ignored unless `HEADS_UP_ALLOW_HEADLESS=1`.
 - Real end-to-end: `claude -p "... call notify_user ..." --model haiku` from a project folder, then read `DATA/state.json`.

@@ -6,7 +6,10 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 const core = await import("../core.mjs");
-const { HARD_CAP, DEFAULTS, normalize, blockedReason, alertVolume, activeFocus, focusReadable, detectorProblems, spokenName, isProjectName, alert, withPlayLock } = core;
+const { HARD_CAP, DEFAULTS, normalize, blockedReason, alertVolume, detectorProblems, spokenName, isProjectName, alert, withPlayLock } = core;
+// macOS Focus parsing reads files, so it runs on any system.
+const { activeFocus, focusReadable } = await import("../platform/darwin.mjs");
+const platform = await import("../platform/index.mjs");
 
 const at = (h, m = 0) => new Date(2026, 9, 25, h, m).getTime(); // a Sunday
 const writeHistory = (history) => writeFileSync(join(DATA, "state.json"), JSON.stringify({ history }));
@@ -134,8 +137,8 @@ test("detector problems are reported, not hidden", () => {
   const on = normalize({});
   assert.deepEqual(detectorProblems(on, { media: { mic: false, camera: false }, helper: true, focus: true }), []);
   const [notBuilt, noFocus] = detectorProblems(on, { media: null, helper: false, focus: false });
-  assert.match(notBuilt, /headsup install/);
-  assert.match(noFocus, /Focus detection/);
+  assert.ok(notBuilt.endsWith(platform.callsSetup), notBuilt);
+  assert.ok(noFocus.startsWith(`${platform.words.focus} detection`), noFocus);
   assert.match(detectorProblems(on, { media: null, helper: true, focus: true })[0], /didn't answer/);
   assert.deepEqual(detectorProblems(normalize(quiet), { media: null, helper: false, focus: false }), [], "switched-off detectors don't warn");
 });
@@ -180,20 +183,24 @@ test("play lock: one at a time, and a dead holder's lock is taken over", async (
   await assert.rejects(withPlayLock(async () => {}, { waitMs: 300 }), /still playing/);
 });
 
-test("play lock: a tampered lock file can't put anything but a volume into AppleScript", async () => {
-  // A stand-in osascript that records the script it was given (and never touches the real volume).
+test("play lock: a tampered lock file can't put anything but a volume into the volume command", { skip: process.platform === "win32" && "needs /bin/sh" }, async () => {
+  // A stand-in volume command (osascript on macOS, pactl on Linux) that records what it was
+  // given and never touches the real volume.
+  const mac = process.platform === "darwin";
   const bin = join(DATA, "fake-bin");
-  const seen = join(DATA, "osascript.txt");
+  const seen = join(DATA, "volume-command.txt");
   mkdirSync(bin, { recursive: true });
-  writeFileSync(join(bin, "osascript"), `#!/bin/sh\nprintf '%s' "$2" > "${seen}"\n`);
-  chmodSync(join(bin, "osascript"), 0o755);
+  const fake = mac ? "osascript" : "pactl";
+  writeFileSync(join(bin, fake), mac ? `#!/bin/sh\nprintf '%s' "$2" > "${seen}"\n` : `#!/bin/sh\necho "$*" >> "${seen}"\n`);
+  chmodSync(join(bin, fake), 0o755);
   const path = process.env.PATH;
   process.env.PATH = `${bin}:${path}`;
   try {
     const before = { vol: '50\ndo shell script "touch /tmp/x"', muted: 'true\ndo shell script "touch /tmp/x"' };
     writeFileSync(join(DATA, "playing.lock"), JSON.stringify({ pid: 2 ** 22 + 1, before }));
     assert.equal(await withPlayLock(async () => "ran", { waitMs: 1000 }), "ran");
-    assert.equal(readFileSync(seen, "utf8"), "set volume output volume 0\nset volume output muted false");
+    const expected = mac ? "set volume output volume 0\nset volume output muted false" : "set-sink-volume @DEFAULT_SINK@ 0%\nset-sink-mute @DEFAULT_SINK@ 0\n";
+    assert.equal(readFileSync(seen, "utf8"), expected);
   } finally {
     process.env.PATH = path;
     rmSync(bin, { recursive: true, force: true });

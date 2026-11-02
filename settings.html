@@ -6,13 +6,14 @@
 <title>Heads-up</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <script>
-  // Apply the saved theme before first paint. "auto" (or nothing saved) follows the Mac.
+  // Apply the saved theme before first paint. "auto" (or nothing saved) follows the system.
   try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
 </script>
 <style>
   /* Heads-up: liquid glass on a clean analogous gradient (indigo → violet, cyan highlight).
      One accent gradient for "on", amber only for "silent right now". Type is SF Pro,
-     the Mac's own face, which suits glass surfaces and needs no download. */
+     the Mac's own face, which suits glass surfaces and needs no download; Linux and
+     Windows get their own system face. */
   :root {
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
     --base: #EEF1FB;
@@ -443,10 +444,10 @@
     <dl class="facts">
       <dt>Location</dt><dd id="factLocation">–</dd>
       <dt>Output</dt><dd id="factOutput">–</dd>
-      <dt>Mac volume</dt><dd id="factVolume">–</dd>
+      <dt data-word="volume">Mac volume</dt><dd id="factVolume">–</dd>
       <dt>Last input</dt><dd id="factIdle">–</dd>
       <dt>Calls</dt><dd id="factCalls">–</dd>
-      <dt>Focus</dt><dd id="factFocus">–</dd>
+      <dt data-word="focus">Focus</dt><dd id="factFocus">–</dd>
     </dl>
 
     <div class="recent">
@@ -458,7 +459,7 @@
   <main>
     <section>
       <h2>Voice</h2>
-      <p class="lede">Who speaks the alerts. Press play to hear a voice on your Mac before choosing it. You can add any voice from your ElevenLabs account or Sarvam's speakers too.</p>
+      <p class="lede">Who speaks the alerts. Press play to hear a voice on your <span data-word="machine">Mac</span> before choosing it. You can add any voice from your ElevenLabs account or Sarvam's speakers too.</p>
       <div class="voices" id="voices" role="radiogroup" aria-label="Voice"></div>
       <div class="group stack" id="voiceNote" hidden></div>
       <div id="library" hidden>
@@ -524,7 +525,7 @@
           <div class="controls"><label class="switch"><input type="checkbox" data-k="live.fast" aria-label="Faster ElevenLabs model"><span></span></label></div>
         </div>
         <div class="row">
-          <div class="text"><div class="title">Try a line</div><div class="desc" id="sayDesc">Plays on your Mac in the current voice.</div></div>
+          <div class="text"><div class="title">Try a line</div><div class="desc" id="sayDesc">Plays on your <span data-word="machine">Mac</span> in the current voice.</div></div>
           <div class="controls">
             <input class="field" id="sayText" placeholder="The build is green, and I'm ready for review." maxlength="400" aria-label="Line to speak">
             <span class="count" id="sayCount"></span>
@@ -550,8 +551,8 @@
     </section>
 
     <section>
-      <h2>Calls and Focus</h2>
-      <p class="lede">Stay quiet while you're on a call or have a Focus mode on. Heads-up checks device state only; it never listens or records.</p>
+      <h2>Calls and <span data-word="focus">Focus</span></h2>
+      <p class="lede">Stay quiet while you're on a call or <span data-word="focusOn">have a Focus mode on</span>. Heads-up checks device state only; it never listens or records.</p>
       <div class="group">
         <div class="row">
           <div class="text"><div class="title">When a microphone is in use</div><div class="desc" id="micDesc">Zoom, Meet, FaceTime, dictation</div></div>
@@ -562,7 +563,7 @@
           <div class="controls"><label class="switch"><input type="checkbox" data-k="calls.camera" aria-label="Silent when a camera is in use"><span></span></label></div>
         </div>
         <div class="row">
-          <div class="text"><div class="title">When a Focus is on</div><div class="desc" id="focusDesc">Focus modes you switch on, and scheduled ones</div></div>
+          <div class="text"><div class="title" data-word="focusWhen">When a Focus is on</div><div class="desc" id="focusDesc">Focus modes you switch on, and scheduled ones</div></div>
           <div class="controls"><label class="switch"><input type="checkbox" data-k="calls.focus" aria-label="Silent when a Focus is on"><span></span></label></div>
         </div>
       </div>
@@ -570,7 +571,7 @@
 
     <section>
       <h2>Locations</h2>
-      <p class="lede">Limit alerts to places like home or your office. A place is recognised by the network you're on, with no GPS, and nothing leaves your Mac.</p>
+      <p class="lede">Limit alerts to places like home or your office. A place is recognised by the network you're on, with no GPS, and nothing leaves your <span data-word="machine">Mac</span>.</p>
       <div class="group">
         <div class="row">
           <div class="text"><div class="title">Only play at saved locations</div><div class="desc">Alerts stay silent on any other network.</div></div>
@@ -619,10 +620,10 @@
 
     <section>
       <h2>Volume</h2>
-      <p class="lede">If your Mac is muted or quiet, an alert briefly turns it up, then puts it back. It never goes past the max.</p>
+      <p class="lede">If your <span data-word="machine">Mac</span> is muted or quiet, an alert briefly turns it up, then puts it back. It never goes past the max.</p>
       <div class="group">
         <div class="row">
-          <div class="text"><div class="title">Adjust volume for alerts</div><div class="desc">Off plays at whatever volume your Mac is set to.</div></div>
+          <div class="text"><div class="title">Adjust volume for alerts</div><div class="desc">Off plays at whatever volume your <span data-word="machine">Mac</span> is set to.</div></div>
           <div class="controls"><label class="switch"><input type="checkbox" data-k="volume.auto" aria-label="Adjust volume for alerts"><span></span></label></div>
         </div>
       </div>
@@ -631,7 +632,7 @@
 
     <section id="keys">
       <h2>Voice provider keys</h2>
-      <p class="lede">Needed to record anything new: project names, your own wording, added voices and Claude's own lines. The built-in alerts work without a key. Keys go into your macOS Keychain and are never shown again.</p>
+      <p class="lede">Needed to record anything new: project names, your own wording, added voices and Claude's own lines. The built-in alerts work without a key. Keys go into your <span data-word="keyStoreFull">macOS Keychain</span> and are never shown again.</p>
       <div class="group" id="keyList"></div>
     </section>
     <footer class="credits">Heads-up · Built and maintained by <a href="https://brandbakery.tech" target="_blank" rel="noopener">Brand Bakery</a> · Voices by ElevenLabs (elevenlabs.io) and Sarvam</footer>
@@ -756,7 +757,7 @@ function stateView() {
   if (b === "not at a saved location") return ["amber", "Silent here", "This network isn't one of your saved locations."];
   if (b?.startsWith("location lock")) return ["amber", "Silent", "Location lock is on, but no locations are saved yet."];
   if (b?.startsWith("quiet hours")) return ["amber", "Quiet hours", "Alerts resume at " + c.quiet_hours.end + "."];
-  if (b?.startsWith("Focus is on")) return ["amber", "Focus on", S.focus + " Focus is on. Alerts resume when it ends."];
+  if (b?.startsWith(S.words.focus + " is on")) return ["amber", S.words.focus + " on", (S.focus === S.words.focus ? S.focus : S.focus + " " + S.words.focus) + " is on. Alerts resume when it ends."];
   if (b?.startsWith("you're on a call")) return ["amber", "On a call", "Your " + (b.includes("camera") ? "camera" : "microphone") + " is in use. Alerts resume when the call ends."];
   if (b?.startsWith("hourly")) return ["amber", "Paused", "The hourly limit is reached. Alerts resume within the hour."];
   if (b) return ["amber", "Silent", b];
@@ -767,6 +768,9 @@ function stateView() {
 }
 
 function render() {
+  // What this OS calls things ("Mac" or "computer", "Focus" or "Do Not Disturb").
+  document.querySelectorAll("[data-word]").forEach((el) => { if (S.words[el.dataset.word]) el.textContent = S.words[el.dataset.word]; });
+  $('[data-k="calls.focus"]').setAttribute("aria-label", "Silent " + S.words.focusWhen.charAt(0).toLowerCase() + S.words.focusWhen.slice(1));
   const c = S.config;
   const [tone, title, text] = stateView();
   $("#panel").dataset.tone = tone;
@@ -857,24 +861,24 @@ function render() {
 
   const vol = (dev, name) => `
     <h3>${name}</h3>
-    <div class="group">${[["target", "Alert volume", "Used when your Mac is muted or below " + c.volume[dev].floor + "%."], ["cap", "Max", "Never louder than this. Hard limit " + S.hardCap[dev] + "%."]].map(([f, t, d]) => `
+    <div class="group">${[["target", "Alert volume", "Used when your " + S.words.machine + " is muted or below " + c.volume[dev].floor + "%."], ["cap", "Max", "Never louder than this. Hard limit " + S.hardCap[dev] + "%."]].map(([f, t, d]) => `
       <div class="row">
         <div class="text"><div class="title">${t}</div><div class="desc">${d}</div></div>
         <div class="controls"><input type="range" min="5" max="${S.hardCap[dev]}" value="${c.volume[dev][f]}" data-k="volume.${dev}.${f}" aria-label="${name} ${t}"><span class="val">${c.volume[dev][f]}%</span></div>
       </div>`).join("")}
     </div>`;
-  $("#volGroups").innerHTML = vol("speakers", "Mac speakers") + vol("headphones", "AirPods and headphones");
+  $("#volGroups").innerHTML = vol("speakers", S.words.speakers) + vol("headphones", S.words.headphones);
   document.querySelectorAll("input[type=range]").forEach(fill);
 
   const m = S.media;
   const problem = (start, fallback) => (S.detectorProblems ?? []).find((p) => p.startsWith(start)) ?? fallback;
   const noCalls = problem("Call detection", "Can't check right now");
-  const noFocus = problem("Focus detection", "Can't read macOS Focus settings right now");
+  const noFocus = problem(S.words.focus + " detection", "Can't read the " + S.words.focus + " setting right now");
   $("#factCalls").textContent = !m ? "Unavailable" : m.camera ? "Camera in use" : m.mic ? "Mic in use" : "None";
-  $("#factFocus").textContent = !S.focusReadable ? "Unavailable" : S.focus ?? "Off";
-  $("#micDesc").textContent = !m ? noCalls : m.mic ? "In use right now" : "Zoom, Meet, FaceTime, dictation";
+  $("#factFocus").textContent = !S.focusReadable ? "Unavailable" : S.focus === S.words.focus ? "On" : S.focus ?? "Off";
+  $("#micDesc").textContent = !m ? noCalls : m.mic ? "In use right now" : S.words.micApps;
   $("#camDesc").textContent = !m ? noCalls : m.camera ? "In use right now" : "Video calls and recordings";
-  $("#focusDesc").textContent = !S.focusReadable ? noFocus : S.focus ? S.focus + " is on right now" : "Focus modes you switch on, and scheduled ones";
+  $("#focusDesc").textContent = !S.focusReadable ? noFocus : S.focus === S.words.focus ? "On right now" : S.focus ? S.focus + " is on right now" : S.words.focusDesc;
 
   const provider = infoOf(c.voice)?.provider;
   const providerName = provider === "sarvam" ? "Sarvam" : "ElevenLabs";
@@ -906,7 +910,7 @@ function render() {
     <div class="row"><div class="text"><div class="title">This month</div><div class="desc">Repeated lines are cached, so they're only paid for once.</div></div><div class="controls"><span class="val">${esc(both(u.month))}</span></div></div>
     ${acct ? `<div class="row"><div class="text"><div class="title">ElevenLabs plan</div><div class="desc">Credits used across everything on your account${acct.resets ? ", resets " + new Date(acct.resets).toLocaleDateString([], { day: "numeric", month: "short" }) : ""}.</div></div><div class="controls"><span class="val">${num(acct.used)} of ${num(acct.limit)}</span></div></div>` : ""}`;
 
-  const SOURCES = { env: "Using the key from your environment", keychain: "Saved in your Keychain", "shared keychain": "Using a key another app saved in your Keychain" };
+  const SOURCES = { env: "Using the key from your environment", keychain: "Saved in your " + S.words.keyStore, "shared keychain": "Using a key another app saved in your " + S.words.keyStore };
   $("#keyList").innerHTML = [["elevenlabs", "ElevenLabs", "American, British and Australian voices"], ["sarvam", "Sarvam", "Indian voices"]].map(([id, name, use]) => `
     <div class="row">
       <div class="text"><div class="title">${name}</div><div class="desc">${S.keys[id] ? SOURCES[S.keys[id]] : "No key. Needed to record " + use + "."}</div></div>
@@ -956,7 +960,7 @@ function renderLibrary() {
     </div>`).join("") : '<div class="row"><div class="text"><div class="desc">No voices match.</div></div></div>')
     + `<div class="row"><div class="text"><div class="desc">${lib.provider === "elevenlabs"
       ? "These are the voices in your ElevenLabs account. To use one from the ElevenLabs Voice Library, add it to My Voices on elevenlabs.io, then reopen this list. Previews play here in the browser and are free."
-      : "Sarvam voices speak Indian English. Add one, then press its play button to hear it on your Mac (about 30 characters)."}</div></div></div>`;
+      : "Sarvam voices speak Indian English. Add one, then press its play button to hear it on your " + S.words.machine + " (about 30 characters)."}</div></div></div>`;
 }
 
 async function loadLibrary(provider) {
@@ -1104,7 +1108,7 @@ document.addEventListener("click", (e) => {
     const id = b.dataset.savekey, input = $("#key-" + id);
     if (!input.value.trim()) return toast("Paste a key first");
     api("/api/key", { provider: id, key: input.value.trim() })
-      .then((s) => { S = s; render(); toast("Key saved to your Keychain"); })
+      .then((s) => { S = s; render(); toast("Key saved to your " + S.words.keyStore); })
       .catch((err) => toast(err.message));
     input.value = "";
     return;

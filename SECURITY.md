@@ -1,6 +1,6 @@
 # Security
 
-Heads-up runs on your own Mac: a local MCP server, hooks, and a settings page on 127.0.0.1. See "Privacy and security" in the [README](README.md) for what it sends, what it stores and where your keys live.
+Heads-up runs on your own computer (macOS, Linux or Windows): a local MCP server, hooks, and a settings page on 127.0.0.1. See "Privacy and security" in the [README](README.md) for what it sends, what it stores and where your keys live.
 
 ## Reporting a problem
 

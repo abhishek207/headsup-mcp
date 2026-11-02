@@ -14,7 +14,8 @@
 import { spawn, execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ROOT, STATUSES, activeFocus, alert, blockedReason, currentLocation, detectorProblems, loadConfig, probeDetectors, saveConfig } from "./core.mjs";
+import { PLATFORM_WORDS, ROOT, STATUSES, activeFocus, alert, blockedReason, currentLocation, detectorProblems, loadConfig, probeDetectors, saveConfig } from "./core.mjs";
+import { openUrl } from "./platform/index.mjs";
 import { usageSummary } from "./speech.mjs";
 import { elevenUsage, keySource } from "./tts.mjs";
 
@@ -35,10 +36,14 @@ switch (cmd) {
   case "settings":
   case "open": {
     if (!(await up())) {
-      spawn(process.execPath, [join(ROOT, "settings.mjs")], { detached: true, stdio: "ignore" }).unref();
+      spawn(process.execPath, [join(ROOT, "settings.mjs")], { detached: true, stdio: "ignore", windowsHide: true }).unref();
       for (let i = 0; i < 30 && !(await up()); i++) await new Promise((r) => setTimeout(r, 100));
     }
-    execFileSync("open", [URL]);
+    try {
+      openUrl(URL);
+    } catch {
+      // no browser to open: the address below is enough
+    }
     console.log(`Settings: ${URL}`);
     break;
   }
@@ -72,7 +77,11 @@ switch (cmd) {
     const probe = probeDetectors();
     const m = probe.media;
     console.log(`Calls:    ${!(c.calls.mic || c.calls.camera) ? "off" : !m ? "unavailable" : m.camera ? "camera in use" : m.mic ? "mic in use" : "none"}`);
-    console.log(`Focus:    ${!c.calls.focus ? "off" : !probe.focus ? "unavailable" : (activeFocus() ?? "none")}`);
+    // macOS names the Focus that's on ("Work"); Linux and Windows have one switch.
+    const focus = activeFocus();
+    const focusNow = focus === PLATFORM_WORDS.focus ? "on" : (focus ?? (PLATFORM_WORDS.focus === "Focus" ? "none" : "off"));
+    const focusLabel = `${PLATFORM_WORDS.focus}:`;
+    console.log(`${focusLabel.length < 10 ? focusLabel.padEnd(10) : `${focusLabel} `}${!c.calls.focus ? "off" : !probe.focus ? "unavailable" : focusNow}`);
     for (const p of detectorProblems(c, probe)) console.log(`Warning:  ${p}`);
     break;
   }

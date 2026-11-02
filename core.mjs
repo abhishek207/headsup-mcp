@@ -1,23 +1,26 @@
 // Shared logic for heads-up: config + guardrails, alert history, volume
 // safety and playback. Used by the MCP server, the settings page and the CLI.
 // config.json and state.json are re-read on every call, so edits apply at once
-// to every running Claude session.
+// to every running Claude session. Everything the OS does (playback, volume, the
+// detectors, locations) comes from platform/, so these rules are the same on
+// macOS, Linux and Windows.
 
-import { execFile, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { promisify } from "node:util";
-import { DATA, HELPER as MEDIA_HELPER, ROOT } from "./paths.mjs";
+import { DATA, ROOT } from "./paths.mjs";
+import * as platform from "./platform/index.mjs";
+import { MAC } from "./platform/common.mjs";
 import { Skip, cleanMessage, compose, costOf, voiceInfo } from "./speech.mjs";
 import { PROVIDERS, cachedSegment, segKey } from "./tts.mjs";
 
-const run = promisify(execFile);
 export { DATA, ROOT };
+export const { words: PLATFORM_WORDS, getVolume, outputDevice, currentNetworks, idleSeconds, mediaInUse, focusReadable, activeFocus } = platform;
 const CONFIG = join(DATA, "config.json");
 const STATE = join(DATA, "state.json");
 const VOICES = join(ROOT, "voices");
-const CHIME = "/System/Library/Sounds/Glass.aiff";
+const chime = () => platform.chimes.find(existsSync) ?? null;
 const FALLBACK_VOICE = "american-male";
 
 const { greeting, templates } = JSON.parse(readFileSync(join(ROOT, "templates.json"), "utf8"));
@@ -206,27 +209,6 @@ export const findClip = (voice, status) =>
   ["mp3", "wav", "m4a", "aiff"].map((ext) => join(VOICES, voice, `${status}.${ext}`)).find(existsSync);
 export const clipFor = (voice, status) => findClip(voice, status) ?? findClip(FALLBACK_VOICE, status);
 
-// Location = the network you're on, identified by the router's hardware (MAC)
-// address. It needs no Location Services permission and nothing leaves the Mac.
-// (macOS redacts the Wi-Fi name for apps without that permission.)
-const MAC = /^([0-9a-f]{1,2}:){5}[0-9a-f]{1,2}$/i;
-
-export function currentNetworks() {
-  const nets = [];
-  for (let i = 0; i < 10; i++) {
-    const iface = `en${i}`;
-    try {
-      const router = execFileSync("ipconfig", ["getoption", iface, "router"], { encoding: "utf8", timeout: 2000 }).trim();
-      if (!router) continue;
-      const mac = execFileSync("arp", ["-n", router], { encoding: "utf8", timeout: 2000 }).match(/ at ([0-9a-f:]+) /i)?.[1];
-      if (mac && MAC.test(mac)) nets.push({ iface, router, mac: mac.toLowerCase() });
-    } catch {
-      // interface not present or not connected
-    }
-  }
-  return nets;
-}
-
 export function currentLocation(c = loadConfig(), nets = currentNetworks()) {
   const match = c.locations.find((l) => nets.some((n) => n.mac === l.mac));
   return { networks: nets, location: match?.name ?? null };
@@ -249,78 +231,28 @@ function inQuietHours({ start, end }, now = new Date()) {
 
 const hhmm = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-// Seconds since the last keyboard, mouse or trackpad input (macOS HIDIdleTime), or null if unknown.
-export function idleSeconds() {
-  try {
-    const out = execFileSync("ioreg", ["-c", "IOHIDSystem", "-d", "4"], { encoding: "utf8", timeout: 2000 });
-    const ns = Number(out.match(/"HIDIdleTime" = (\d+)/)?.[1]);
-    return Number.isFinite(ns) ? ns / 1e9 : null;
-  } catch {
-    return null;
-  }
-}
-
-// Whether any app is using a microphone or camera ({ mic, camera }), or null if unknown.
-// The helper (media-in-use) only reads device state, so it never lights the privacy indicator.
-
-export function mediaInUse() {
-  try {
-    return JSON.parse(execFileSync(MEDIA_HELPER, { encoding: "utf8", timeout: 2000 }));
-  } catch {
-    return null;
-  }
-}
-
-const FOCUS_DB = join(homedir(), "Library", "DoNotDisturb", "DB");
-
-// Whether macOS's Focus settings can be read at all. If Apple moves or changes them,
-// Focus detection stops working, and this is how status and the page find out.
-export function focusReadable(db = FOCUS_DB) {
-  return Boolean(readJson(join(db, "ModeConfigurations.json"), null)?.data?.[0]?.modeConfigurations);
-}
-
 // What the call and Focus detectors can see right now.
-export const probeDetectors = () => ({ media: mediaInUse(), helper: existsSync(MEDIA_HELPER), focus: focusReadable() });
+export const probeDetectors = () => ({ media: mediaInUse(), helper: platform.callsReady(), focus: focusReadable() });
 
 // Switched-on detectors that can't work right now, as sentences. Empty when all is well.
-// Without this, a missing helper or unreadable Focus file just means alerts play during calls.
+// Without this, a missing helper or unreadable Focus setting just means alerts play during calls.
 export function detectorProblems(c = loadConfig(), probe = probeDetectors()) {
   const problems = [];
   if ((c.calls.mic || c.calls.camera) && !probe.media) {
-    problems.push(probe.helper
-      ? "Call detection isn't working: media-in-use didn't answer."
-      : "Call detection is off: the mic and camera checker isn't built. Run headsup install.");
+    problems.push(probe.helper ? "Call detection isn't working: the mic and camera check didn't answer." : `Call detection is off: ${platform.callsSetup}`);
   }
-  if (c.calls.focus && !probe.focus) problems.push("Focus detection isn't working: macOS Focus settings couldn't be read.");
+  if (c.calls.focus && !probe.focus) problems.push(`${platform.words.focus} detection isn't working: ${platform.focusUnreadable}`);
   return problems;
 }
 
-// Name of the active Focus ("Work", "Do Not Disturb"), or null. Reads the files macOS
-// keeps for Focus: manually switched-on modes, plus enabled time schedules.
-// Sleep and smart (location/app) triggers aren't recorded there, so they aren't seen.
-export function activeFocus(now = new Date(), db = FOCUS_DB) {
-  const modes = readJson(join(db, "ModeConfigurations.json"), {})?.data?.[0]?.modeConfigurations ?? {};
-  const nameOf = (id) => modes[id]?.mode?.name ?? "Focus";
-  const records = readJson(join(db, "Assertions.json"), {})?.data?.[0]?.storeAssertionRecords ?? [];
-  const manual = records.find((r) => r?.assertionDetails?.assertionDetailsModeIdentifier);
-  if (manual) return nameOf(manual.assertionDetails.assertionDetailsModeIdentifier);
-  const mins = now.getHours() * 60 + now.getMinutes();
-  for (const [id, m] of Object.entries(modes)) {
-    for (const t of m.triggers?.triggers ?? []) {
-      if (t.class !== "DNDModeConfigurationScheduleTrigger" || t.enabledSetting !== 2) continue;
-      if (!(t.timePeriodWeekdays & (1 << now.getDay()))) continue;
-      const s = t.timePeriodStartTimeHour * 60 + t.timePeriodStartTimeMinute;
-      const e = t.timePeriodEndTimeHour * 60 + t.timePeriodEndTimeMinute;
-      if (s <= e ? mins >= s && mins < e : mins >= s || mins < e) return nameOf(id);
-    }
-  }
-  return null;
-}
+// The reason an alert is skipped while Focus (macOS) or Do Not Disturb (Linux, Windows) is on.
+export const focusReason = (name) => (name === platform.words.focus ? `${name} is on` : `${platform.words.focus} is on (${name})`);
 
 // Returns null if the alert may play, otherwise the reason it is blocked.
 export function blockedReason(status, c = loadConfig(), now = Date.now()) {
   if (process.env.HEADS_UP_DISABLED === "1") return "disabled by HEADS_UP_DISABLED=1";
   if (!c.enabled) return "voice alerts are switched off";
+  if (process.env.HEADS_UP_ASSUME_AUDIO !== "1" && !platform.audioReady()) return "no sound output on this machine (a remote or headless session)";
   if (c.muted_until && Date.parse(c.muted_until) > now) return `muted until ${hhmm(c.muted_until)}`;
   if (!c.statuses[status]) return `the "${status}" alert is switched off`;
   if (c.quiet_hours.enabled && inQuietHours(c.quiet_hours, new Date(now))) return `quiet hours (${c.quiet_hours.start}–${c.quiet_hours.end})`;
@@ -330,7 +262,7 @@ export function blockedReason(status, c = loadConfig(), now = Date.now()) {
   }
   if (c.calls.focus) {
     const focus = activeFocus(new Date(now));
-    if (focus) return `Focus is on (${focus})`;
+    if (focus) return focusReason(focus);
   }
   if (c.calls.mic || c.calls.camera) {
     const m = mediaInUse();
@@ -347,31 +279,8 @@ export function blockedReason(status, c = loadConfig(), now = Date.now()) {
   return null;
 }
 
-const osa = async (script) => (await run("osascript", ["-e", script])).stdout.trim();
-
-export async function getVolume() {
-  const [vol, muted] = (await osa("set s to get volume settings\nreturn (output volume of s as text) & \",\" & (output muted of s as text)")).split(",");
-  return { vol: Number(vol), muted: muted === "true" };
-}
-
-// Only a number and a boolean ever reach the script, even from a tampered lock file.
-const setVolume = (vol, muted) =>
-  osa(`set volume output volume ${clamp(vol, 0, 100, 0)}` + (muted === undefined ? "" : `\nset volume output muted ${muted === true}`));
-
-// Default output counts as headphones if it is Bluetooth/USB or its name says so.
-export async function outputDevice() {
-  try {
-    const { stdout } = await run("system_profiler", ["SPAudioDataType", "-json"], { timeout: 5000 });
-    const items = JSON.parse(stdout).SPAudioDataType.flatMap((g) => g._items ?? []);
-    const out = items.find((i) => i.coreaudio_default_audio_output_device === "spaudio_yes");
-    if (!out) return { name: "unknown", headphones: true };
-    const transport = out.coreaudio_device_transport ?? "";
-    const name = `${out._name} ${out.coreaudio_output_source ?? ""}`;
-    return { name: out._name, headphones: /bluetooth|usb/.test(transport) || /headphone|airpods|buds|beats|headset/i.test(name) };
-  } catch {
-    return { name: "unknown", headphones: true }; // unknown device: assume ears are close
-  }
-}
+// Only a number and a boolean ever reach the OS, even from a tampered lock file.
+const setVolume = (vol, muted) => platform.setVolume(clamp(vol, 0, 100, 0), muted === undefined ? undefined : muted === true);
 
 // Returns the volume to use during the alert, or null to leave it alone.
 export function alertVolume({ vol, muted }, limits, headphones, requested) {
@@ -383,7 +292,7 @@ export function alertVolume({ vol, muted }, limits, headphones, requested) {
 
 // One alert plays at a time across every Claude session, through a lock file in DATA.
 // The lock also holds the volume to restore, so if a process dies mid-alert the next
-// alert puts the volume back first instead of leaving the Mac loud.
+// alert puts the volume back first instead of leaving the computer loud.
 const PLAY_LOCK = join(DATA, "playing.lock");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const alive = (pid) => {
@@ -438,8 +347,10 @@ const play = (files, c, requested) =>
   withPlayLock(async (remember) => {
     let before = null;
     try {
-      if (c.volume.auto || requested !== undefined) {
-        const current = await getVolume();
+      // No volume control on this system (Linux without pactl or wpctl, Windows without its
+      // helper): play at the volume the user already has, the way any system sound would.
+      const current = c.volume.auto || requested !== undefined ? await getVolume().catch(() => null) : null;
+      if (current) {
         const { headphones } = await outputDevice();
         const vol = alertVolume(current, headphones ? c.volume.headphones : c.volume.speakers, headphones, requested);
         if (vol !== null) {
@@ -450,7 +361,7 @@ const play = (files, c, requested) =>
       }
       for (const [i, f] of files.entries()) {
         if (i) await sleep(300);
-        await run("afplay", [f]);
+        await platform.play(f);
       }
     } finally {
       if (before) await setVolume(before.vol, before.muted).catch(() => {});
@@ -609,7 +520,8 @@ export function alert(status, { repeat = 1, volume, force = false, source = "cla
   queue = queue
     .then(async () => {
       const { file } = await prepared;
-      const files = [...(c.chime && existsSync(CHIME) ? [CHIME] : []), ...Array(times).fill(file)];
+      const bell = c.chime ? chime() : null;
+      const files = [...(bell ? [bell] : []), ...Array(times).fill(file)];
       await play(files, c, vol);
     })
     .catch((e) => process.stderr.write(`heads-up: ${e.message}\n`));

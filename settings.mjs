@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import { GREETING, HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, textFor } from "./core.mjs";
+import { GREETING, HARD_CAP, PLATFORM_WORDS, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, textFor } from "./core.mjs";
 import { composed, usageSummary, voiceInfo } from "./speech.mjs";
 import { PROVIDERS, checkKey, deleteKey, elevenUsage, keySource, providerVoices, saveKey } from "./tts.mjs";
 
@@ -40,6 +40,8 @@ async function state() {
   const reason = blockedReason("completed", { ...config, statuses: allOn, away: { ...config.away, enabled: false } });
   return {
     config,
+    // What this OS calls things: "Mac" or "computer", "Focus" or "Do Not Disturb", "Keychain" or "keyring".
+    words: PLATFORM_WORDS,
     voices: listVoices(),
     voiceInfo: readJson("voices.json", {}),
     templates: TEMPLATES,
@@ -54,7 +56,7 @@ async function state() {
     media: probe.media,
     focus: activeFocus(),
     focusReadable: probe.focus,
-    // Switched-on detectors that can't see anything (helper not built, Focus file unreadable).
+    // Switched-on detectors that can't see anything (helper not built, Focus setting unreadable).
     detectorProblems: detectorProblems(config, probe),
     projects: projects(config),
     // Where each provider's key comes from; the key itself never leaves the server.
@@ -250,7 +252,7 @@ const server = createServer(async (req, res) => {
       const r = next.wording[id] ? await recordAlerts(next.voice, next, [id], "wording") : { spent: 0, note: null };
       return json(200, { ...r, state: await state() });
     }
-    // Provider keys go straight into the macOS Keychain; they're never stored in config or sent back.
+    // Provider keys go straight into the OS key store; they're never stored in config or sent back.
     if (req.method === "POST" && url.pathname === "/api/key") {
       const { provider, key } = await readBody(req);
       const clean = String(key ?? "").trim();
