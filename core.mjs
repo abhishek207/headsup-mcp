@@ -10,7 +10,8 @@ import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { DATA, HELPER as MEDIA_HELPER, ROOT } from "./paths.mjs";
 import { Skip, cleanMessage, compose, costOf, voiceInfo } from "./speech.mjs";
-import { PROVIDERS, cachedSegment, segKey } from "./tts.mjs";
+import { LOCAL_VOICES } from "./local.mjs";
+import { VOICE_PROVIDERS, cachedSegment, segKey } from "./tts.mjs";
 
 const run = promisify(execFile);
 export { DATA, ROOT };
@@ -44,7 +45,7 @@ export const DEFAULTS = {
   away: { enabled: false, idle_seconds: 60 },
   // Stay silent while a mic or camera is in use (calls) or a Focus is on.
   calls: { mic: true, camera: true, focus: true },
-  // "Hello from <project>." instead of "Hello." Opt-in: needs the user's own TTS key.
+  // "Hello from <project>." instead of "Hello." Opt-in: needs the user's own TTS key or the local voice.
   project_names: { enabled: false, aliases: {}, muted: [] },
   // Claude Code hooks (hook.mjs): alerts that don't depend on Claude remembering.
   hooks: { permission: true, long_turn: true, long_turn_seconds: 120, idle_reminder: false },
@@ -55,25 +56,27 @@ export const DEFAULTS = {
   },
   // The user's own wording for an alert ({ review: "Your review is needed." }), recorded with their key.
   wording: {},
-  // Voices added from the user's ElevenLabs account or Sarvam's speakers (see normalize for the shape).
+  // Voices added from the user's ElevenLabs account, Sarvam's speakers or the local voice (see normalize for the shape).
   custom_voices: [],
-  // Claude's own lines (notify_user's message), spoken with the user's key. Opt-in, like project names.
-  // daily_chars caps everything recorded automatically per provider per day (0 = nothing new).
+  // Claude's own lines (notify_user's message), spoken with the user's key or the local voice. Opt-in, like project names.
+  // daily_chars caps everything recorded automatically per paid provider per day (0 = nothing new).
   live: { enabled: false, max_chars: 160, daily_chars: 1000, fast: false },
 };
 
 const LIMITS = { wording_chars: 120, custom_voices: 30 };
 const label = (s, n) => String(s ?? "").replace(/[^\p{L}\p{N} .,'&()-]/gu, "").trim().slice(0, n);
 
-// The id a library voice gets in config and in DATA folders: "el-<voice id>", "sarvam-<speaker>".
-export const libraryVoiceId = (v) => `${v.provider === "sarvam" ? "sarvam" : "el"}-${v.provider_id}`;
+// The id a library voice gets in config and in DATA folders: "el-<voice id>", "sarvam-<speaker>",
+// "local-<Kokoro voice>".
+export const libraryVoiceId = (v) => `${{ sarvam: "sarvam", local: "local" }[v.provider] ?? "el"}-${v.provider_id}`;
 
 // Library voices: { id, provider, provider_id, name, accent, gender, fallback }. id is derived,
 // fallback is the built-in voice to use when this one can't be recorded (no key, budget).
 function cleanCustomVoices(list) {
   const builtin = builtinVoices();
   return (Array.isArray(list) ? list : [])
-    .filter((v) => PROVIDERS.includes(v?.provider) && /^[A-Za-z0-9_-]{1,64}$/.test(v.provider_id ?? ""))
+    .filter((v) => VOICE_PROVIDERS.includes(v?.provider) && /^[A-Za-z0-9_-]{1,64}$/.test(v.provider_id ?? ""))
+    .filter((v) => v.provider !== "local" || LOCAL_VOICES.some((l) => l.id === v.provider_id))
     .map((v) => ({
       id: libraryVoiceId(v),
       provider: v.provider,
@@ -523,15 +526,17 @@ export const textFor = (status, c = loadConfig()) => c.wording[status] ?? TEMPLA
 // first (Claude's own message, a project name, edited wording, a library voice), then the
 // same without the message, then without the project name, and finally the built-in track.
 // Anything that needs recording uses the user's key and, unless force, the daily budget.
+// The local voice needs neither, so it has no daily cap on new names either.
 // note says why the first choice wasn't possible ("no ElevenLabs key").
 export async function prepare(voice, status, { project = null, message = null, force = false, kind = null } = {}, c = loadConfig()) {
   const t = TEMPLATES.find((x) => x.id === status);
   const builtin = findClip(voice, status); // null for library voices
   const fallback = builtin ?? clipFor(voiceInfo(voice, c)?.fallback ?? FALLBACK_VOICE, status);
+  const free = voiceInfo(voice, c)?.provider === "local";
   let note = null;
   const greetings = [];
   if (namesProject(project, c)) {
-    if (nameRecorded(voice, project, c) || namesMadeToday() < MAX_NEW_NAMES_PER_DAY) greetings.push({ greet: projectGreeting(project, c), greetId: nameId(project) });
+    if (free || nameRecorded(voice, project, c) || namesMadeToday() < MAX_NEW_NAMES_PER_DAY) greetings.push({ greet: projectGreeting(project, c), greetId: nameId(project) });
     else note = `the daily limit of ${MAX_NEW_NAMES_PER_DAY} new project names is reached`;
   }
   greetings.push({ greet: greeting, greetId: "greeting", greetTrack: builtin });

@@ -2,7 +2,8 @@
 // user's own provider library, project names and Claude's own lines (live
 // messages). Every recording goes through compose(): segments are cached by their
 // text, so a line is paid for once, and every character spent is logged in
-// DATA/usage.json so the page can show what it cost.
+// DATA/usage.json so the page can show what it cost. The local voice costs nothing,
+// so it has no budget and isn't logged.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -112,7 +113,7 @@ async function segment(voice, info, { id, text, track, part, fast }, kind) {
     return out;
   }
   const { data, ext } = await synth(info, text, { fast });
-  spend(info.provider, text.length, kind);
+  if (info.provider !== "local") spend(info.provider, text.length, kind); // the local voice is free
   const out = join(dir, `${key}.${ext}`);
   writeFileSync(out, data);
   return out;
@@ -120,8 +121,8 @@ async function segment(voice, info, { id, text, track, part, fast }, kind) {
 
 // Greeting + 0.6s + message in a voice, cached as one clip. o: { greet, greetId, greetTrack,
 // text, msgId, msgTrack, fast, budget, kind }. budget: today's character limit for this
-// provider (leave out for things the user asked for on the page). Throws Skip when it
-// can't record without breaking a limit, or the provider's error.
+// provider (leave out for things the user asked for on the page; the local voice has none).
+// Throws Skip when it can't record without breaking a limit, or the provider's error.
 export async function compose(voice, c, o) {
   const out = clipPath(voice, o);
   if (existsSync(out)) return out;
@@ -134,8 +135,8 @@ export async function compose(voice, c, o) {
   const cost = costOf(voice, parts);
   if (cost) {
     const name = PROVIDER_NAMES[info.provider];
-    if (!hasKey(info.provider)) throw new Skip(`no ${name} key`);
-    if (o.budget !== undefined && spentToday(info.provider) + cost > o.budget) throw new Skip(`it would go over today's ${name} budget of ${o.budget} characters`);
+    if (!hasKey(info.provider)) throw new Skip(info.provider === "local" ? "the local voice isn't downloaded" : `no ${name} key`);
+    if (info.provider !== "local" && o.budget !== undefined && spentToday(info.provider) + cost > o.budget) throw new Skip(`it would go over today's ${name} budget of ${o.budget} characters`);
   }
   const [g, m] = [await segment(voice, info, parts[0], o.kind), await segment(voice, info, parts[1], o.kind)];
   mkdirSync(dirname(out), { recursive: true });

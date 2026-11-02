@@ -48,8 +48,8 @@ The user may have several sessions running at once, and "I need your review" alo
 - Name the thread or session by its title, or the task in a few words the user would recognise.
 - Don't repeat the project name: with spoken project names on, the greeting already says it ("Hello from Kosh.").
 - Keep it under about 120 characters; longer lines are cut at 160.
-- No names, code, file paths, ids, links, numbers that need reading, or anything secret. The text goes to the user's text-to-speech provider.
-- Still set the closest `status`. Spoken lines are an opt-in feature that needs the user's own ElevenLabs or Sarvam key; when they're off, or the day's budget is used up, the status's built-in line plays instead.
+- No names, code, file paths, ids, links, numbers that need reading, or anything secret. The text may go to the user's text-to-speech provider.
+- Still set the closest `status`. Spoken lines are an opt-in feature that needs the free local voice or the user's own ElevenLabs or Sarvam key; when they're off, or the day's budget is used up, the status's built-in line plays instead.
 
 ## Reading the answer
 

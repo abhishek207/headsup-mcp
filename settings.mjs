@@ -3,12 +3,13 @@
 // Started by `headsup settings`; shuts itself down after 30 idle minutes.
 
 import { createHash } from "node:crypto";
-import { createReadStream, readFileSync } from "node:fs";
+import { createReadStream, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { GREETING, HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, textFor } from "./core.mjs";
+import { LOCAL_DIR, LOCAL_VOICES, installLocal, localReady, localStatus, removeLocal } from "./local.mjs";
 import { composed, usageSummary, voiceInfo } from "./speech.mjs";
-import { PROVIDERS, checkKey, deleteKey, elevenUsage, keySource, providerVoices, saveKey } from "./tts.mjs";
+import { PROVIDERS, cachedSegment, checkKey, deleteKey, elevenUsage, keySource, providerVoices, saveKey, segKey, synth } from "./tts.mjs";
 
 export const PORT = Number(process.env.HEADS_UP_PORT) || 4777; // HEADS_UP_PORT: tests only
 const IDLE_MS = 30 * 60 * 1000;
@@ -59,6 +60,8 @@ async function state() {
     projects: projects(config),
     // Where each provider's key comes from; the key itself never leaves the server.
     keys,
+    // The free local voice: downloaded or not, download progress, sizes.
+    local: localStatus(),
     greeting: GREETING,
     // What recording costs: characters spent per provider (today, this month) and, for
     // ElevenLabs, the plan's own counter.
@@ -85,9 +88,9 @@ function projects(c) {
   }));
 }
 
-// Project names and the model's own lines need a provider key: without one they stay off,
-// whatever the page sends, and deleting the last key switches them off again.
-const anyKey = () => PROVIDERS.some((p) => keySource(p));
+// Project names and the model's own lines need a provider key or the local voice: without
+// either they stay off, whatever the page sends, and removing the last one switches them off again.
+const anyKey = () => PROVIDERS.some((p) => keySource(p)) || localReady();
 const keyFeaturesOff = (c) => ({ ...c, project_names: { ...c.project_names, enabled: false }, live: { ...c.live, enabled: false } });
 const withKeyGate = (c) => (anyKey() ? c : keyFeaturesOff(c));
 
@@ -273,6 +276,32 @@ const server = createServer(async (req, res) => {
       if (!r.ok) return json(400, { error: r.error });
       const p = await r.prepared;
       return p.live ? json(200, { line: p.line, state: await state() }) : json(400, { error: p.note ?? "That key didn't work" });
+    }
+    // The local voice: download in the background (the page polls /api/local), or delete it.
+    if (req.method === "GET" && url.pathname === "/api/local") return json(200, { local: localStatus() });
+    if (req.method === "POST" && url.pathname === "/api/local/install") {
+      if (!localStatus().installing) installLocal().catch(() => {}); // the error shows in localStatus()
+      return json(200, { local: localStatus() });
+    }
+    if (req.method === "POST" && url.pathname === "/api/local/remove") {
+      removeLocal();
+      if (!anyKey()) saveConfig(keyFeaturesOff(loadConfig()));
+      return json(200, await state());
+    }
+    // A short sample of a local voice for the library list, made once and kept.
+    if (req.method === "GET" && url.pathname === "/api/local/preview") {
+      const v = LOCAL_VOICES.find((x) => x.id === url.searchParams.get("voice"));
+      if (!v) return json(404, { error: "unknown voice" });
+      const text = `Hello, I'm ${v.name}. I'll let you know when Claude needs you.`;
+      const dir = join(LOCAL_DIR, "previews");
+      let file = cachedSegment(dir, segKey(v.id, text));
+      if (!file) {
+        const { data } = await synth({ provider: "local", provider_id: v.id }, text);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync((file = join(dir, `${segKey(v.id, text)}.wav`)), data);
+      }
+      res.writeHead(200, { "content-type": "audio/wav", "cache-control": "no-store" });
+      return createReadStream(file).pipe(res);
     }
     if (req.method === "POST" && url.pathname === "/api/key/delete") {
       deleteKey((await readBody(req)).provider);

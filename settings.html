@@ -458,14 +458,14 @@
   <main>
     <section>
       <h2>Voice</h2>
-      <p class="lede">Who speaks the alerts. Press play to hear a voice on your Mac before choosing it. You can add any voice from your ElevenLabs account or Sarvam's speakers too.</p>
+      <p class="lede">Who speaks the alerts. Press play to hear a voice on your Mac before choosing it. You can add a free local voice that runs on your Mac, or any voice from your ElevenLabs account or Sarvam's speakers.</p>
       <div class="voices" id="voices" role="radiogroup" aria-label="Voice"></div>
       <div class="group stack" id="voiceNote" hidden></div>
       <div id="library" hidden>
         <h3>Add a voice</h3>
         <div class="group">
           <div class="row lib-head">
-            <div class="segmented" role="group" aria-label="Provider"><button data-lib="elevenlabs">ElevenLabs</button><button data-lib="sarvam">Sarvam</button></div>
+            <div class="segmented" role="group" aria-label="Provider"><button data-lib="local">On this Mac</button><button data-lib="elevenlabs">ElevenLabs</button><button data-lib="sarvam">Sarvam</button></div>
             <input class="field" id="libSearch" placeholder="Search by name, accent or style" aria-label="Search voices">
             <button class="btn" data-lib-close>Done</button>
           </div>
@@ -505,7 +505,7 @@
 
     <section>
       <h2>Claude's own words</h2>
-      <p class="lede">When a fixed line doesn't say enough, Claude can speak a short line of its own, like “The migration ran, but two tables need your review.” It's recorded with your key, and the same switches, quiet times and volume caps apply. If it can't be recorded, the regular alert plays instead.</p>
+      <p class="lede">When a fixed line doesn't say enough, Claude can speak a short line of its own, like “The migration ran, but two tables need your review.” It's spoken by the local voice or recorded with your key, and the same switches, quiet times and volume caps apply. If it can't be recorded, the regular alert plays instead.</p>
       <div class="group">
         <div class="row">
           <div class="text"><div class="title">Let Claude speak its own lines</div><div class="desc" id="liveDesc">Lines are sent to your voice provider, so Claude is told to keep code and secrets out of them.</div></div>
@@ -516,7 +516,7 @@
           <div class="controls"><input class="field" type="number" min="40" max="400" data-k="live.max_chars" aria-label="Longest line in characters"><span class="unit">characters</span></div>
         </div>
         <div class="row">
-          <div class="text"><div class="title">Daily budget</div><div class="desc">The most Heads-up records on its own each day, per provider: Claude's lines, project names and alerts in new voices. Set 0 to record nothing new. What you record from this page isn't capped.</div></div>
+          <div class="text"><div class="title">Daily budget</div><div class="desc">The most Heads-up records on its own each day with ElevenLabs or Sarvam: Claude's lines, project names and alerts in new voices. Set 0 to record nothing new. What you record from this page isn't capped, and the local voice never is.</div></div>
           <div class="controls"><input class="field" type="number" min="0" max="20000" data-k="live.daily_chars" aria-label="Daily budget in characters"><span class="unit">characters a day</span></div>
         </div>
         <div class="row">
@@ -538,7 +538,7 @@
 
     <section>
       <h2>Project names</h2>
-      <p class="lede">Say which project needs you: "Hello from Kosh. I need your review." Each project's name is recorded once, in your voice, with your own ElevenLabs or Sarvam key.</p>
+      <p class="lede">Say which project needs you: "Hello from Kosh. I need your review." Each project's name is recorded once, in your voice, by the local voice or with your own ElevenLabs or Sarvam key.</p>
       <div class="group">
         <div class="row">
           <div class="text"><div class="title">Say the project name</div><div class="desc" id="namesDesc">Without a key, alerts just say "Hello."</div></div>
@@ -629,12 +629,18 @@
       <div id="volGroups"></div>
     </section>
 
+    <section id="local">
+      <h2>Local voice</h2>
+      <p class="lede">Kokoro, a small voice model that runs on your Mac. It speaks Claude's lines, project names and your wording for free, with no key and no daily limit, and nothing you hear is sent anywhere. It's optional: voices from ElevenLabs and Sarvam keep working as before.</p>
+      <div class="group" id="localBox"></div>
+    </section>
+
     <section id="keys">
       <h2>Voice provider keys</h2>
-      <p class="lede">Needed to record anything new: project names, your own wording, added voices and Claude's own lines. The built-in alerts work without a key. Keys go into your macOS Keychain and are never shown again.</p>
+      <p class="lede">Needed to record with ElevenLabs or Sarvam: project names, your own wording, added voices and Claude's own lines. The built-in alerts and the local voice work without a key. Keys go into your macOS Keychain and are never shown again.</p>
       <div class="group" id="keyList"></div>
     </section>
-    <footer class="credits">Heads-up · Built and maintained by <a href="https://brandbakery.tech" target="_blank" rel="noopener">Brand Bakery</a> · Voices by ElevenLabs (elevenlabs.io) and Sarvam</footer>
+    <footer class="credits">Heads-up · Built and maintained by <a href="https://brandbakery.tech" target="_blank" rel="noopener">Brand Bakery</a> · Voices by ElevenLabs (elevenlabs.io) and Sarvam · Local voice: Kokoro, run with sherpa-onnx</footer>
   </main>
 </div>
 <div id="toast" role="status"></div>
@@ -670,11 +676,13 @@ const textOf = (id) => S.config.wording[id] ?? original(id);
 const infoOf = (v) => S.voiceInfo[v] ?? S.config.custom_voices.find((x) => x.id === v);
 const isCustom = (v) => !S.voiceInfo[v];
 const voiceName = (v) => { const i = infoOf(v); return !i ? v.replace(/-/g, " ") : isCustom(v) ? i.name : i.accent + " " + i.gender.toLowerCase(); };
-const PROVIDER = { elevenlabs: "ElevenLabs", sarvam: "Sarvam" };
+const PROVIDER = { elevenlabs: "ElevenLabs", sarvam: "Sarvam", local: "Local" };
+// Whether a voice's provider can record now: its key, or for the local voice, the download.
+const canRecord = (p) => p === "local" ? Boolean(S.local?.ready) : Boolean(S.keys[p]);
 const num = (n) => Number(n || 0).toLocaleString();
 const X_SVG = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 const EDIT_SVG = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8.2 1.3l2.5 2.5-6.6 6.6H1.6V7.9z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
-let lib = { open: false, provider: "elevenlabs", voices: {}, error: null, loading: false }, editing = null;
+let lib = { open: false, provider: "local", chosen: false, voices: {}, error: null, loading: false }, editing = null;
 
 function toast(msg) {
   const t = $("#toast");
@@ -739,7 +747,8 @@ function sweep() {
 async function play(id, voice) {
   try {
     const v = voice ?? S.config.voice;
-    if (S.recordCost[v] && S.keys[infoOf(v)?.provider]) toast("Recording with your key…");
+    const p = infoOf(v)?.provider;
+    if (S.recordCost[v] && canRecord(p)) toast(p === "local" ? "Making it on your Mac…" : "Recording with your key…");
     const r = await api("/api/test", voice ? { status: id, voice } : { status: id });
     await loadWave(voice ?? S.config.voice, id).catch(() => {});
     sweep();
@@ -797,8 +806,8 @@ function render() {
     else if (document.activeElement !== el) el.value = el.dataset.scale ? Math.round(v / el.dataset.scale) : v;
   });
 
-  // Project names and Claude's own lines need a key; the server keeps them off without one.
-  const anyKey = Boolean(S.keys.elevenlabs || S.keys.sarvam);
+  // Project names and Claude's own lines need a key or the local voice; the server keeps them off without either.
+  const anyKey = Boolean(S.keys.elevenlabs || S.keys.sarvam || S.local?.ready);
   for (const k of ["live.enabled", "project_names.enabled"]) $(`[data-k="${k}"]`).disabled = !anyKey;
 
   $("#voices").innerHTML = S.voices.map((v) => {
@@ -878,8 +887,10 @@ function render() {
 
   const provider = infoOf(c.voice)?.provider;
   const providerName = provider === "sarvam" ? "Sarvam" : "ElevenLabs";
-  $("#namesDesc").textContent = !anyKey ? "Needs your own ElevenLabs or Sarvam key (see Voice provider keys). Until then, alerts just say “Hello.”"
+  $("#namesDesc").textContent = !anyKey ? "Needs the local voice or your own ElevenLabs or Sarvam key (see below). Until then, alerts just say “Hello.”"
+    : provider === "local" ? (S.local.ready ? "New names are spoken by the local voice, for free." : "Download the local voice below to say names in this voice. Until then, alerts just say “Hello.”")
     : S.keys[provider] ? "New names are recorded with your " + providerName + " key, about 20 characters each."
+    : S.local?.ready ? "Pick a local voice under Voice to say names for free, or add a " + providerName + " key below."
     : "Add a " + providerName + " key below to record names in this voice. Until then, alerts just say “Hello.”";
   $("#projectList").innerHTML = S.projects.length
     ? S.projects.map((p) => `
@@ -893,9 +904,11 @@ function render() {
       </div>`).join("")
     : '<div class="row"><div class="text"><div class="desc">Projects appear here after their first alert. Type a spelling to change how a name is said.</div></div></div>';
 
-  $("#liveDesc").textContent = !anyKey ? "Needs your own ElevenLabs or Sarvam key (see Voice provider keys). Until then the regular alert plays."
+  $("#liveDesc").textContent = !anyKey ? "Needs the local voice or your own ElevenLabs or Sarvam key (see below). Until then the regular alert plays."
     : !c.live.enabled ? "Off: Claude's lines are ignored and the regular alert plays."
+    : provider === "local" ? (S.local.ready ? "Lines are spoken on your Mac by the local voice. Nothing is sent anywhere, and there's no daily limit." : "Download the local voice below. Until then the regular alert plays.")
     : S.keys[provider] ? "Lines are recorded with your " + PROVIDER[provider] + " key and sent to " + PROVIDER[provider] + ", so Claude is told to keep code and secrets out of them."
+    : S.local?.ready ? "Pick a local voice under Voice to hear Claude's lines for free, or add a " + PROVIDER[provider] + " key below."
     : "Add a " + PROVIDER[provider] + " key below. Until then the regular alert plays.";
   const u = S.usage, acct = S.account?.elevenlabs;
   const both = (o) => ["elevenlabs", "sarvam"].filter((p) => o[p] || S.keys[p]).map((p) => num(o[p]) + " " + PROVIDER[p]).join(", ") || "Nothing yet";
@@ -918,19 +931,60 @@ function render() {
       </div>
     </div>`).join("");
 
+  renderLocal();
+  watchLocal();
   if (wave.voice !== c.voice) loadWave(c.voice, wave.id).catch(() => {});
+}
+
+// The local voice's row: download (with progress), ready, or the last error.
+function renderLocal() {
+  const L = S.local, mb = (n) => Math.round(n / 1e6) + " MB";
+  let title, desc, controls = "";
+  if (!L.supported) [title, desc] = ["Not available here", "The local voice needs macOS on Apple silicon or Intel."];
+  else if (L.installing) {
+    const pct = L.installing.total ? Math.floor((L.installing.done / L.installing.total) * 100) : 0;
+    title = "Downloading the local voice";
+    desc = { engine: "Getting the engine, " + pct + "%", model: "Getting the voice model, " + pct + "% of " + mb(L.download), unpacking: "Unpacking…", checking: "Checking that it speaks…", elsewhere: "Downloading from another window…" }[L.installing.step];
+    controls = '<button class="btn" disabled>Downloading…</button>';
+  } else if (L.ready) {
+    [title, desc] = ["Ready on this Mac", L.voices + " voices, about " + mb(L.disk) + " on disk. A new line takes a moment to make; repeated lines play from the cache."];
+    controls = '<button class="btn" data-local-pick>Choose a voice</button><button class="btn" data-local-remove>Remove</button>';
+  } else {
+    title = "Download the local voice";
+    desc = (L.error ? "The last download stopped: " + L.error + ". " : "") + "A " + mb(L.download) + " download, about " + mb(L.disk) + " on disk. Then it's free to use as much as you like.";
+    controls = `<button class="btn primary" data-local-install>${L.error ? "Try again" : "Download"}</button>`;
+  }
+  $("#localBox").innerHTML = `<div class="row"><div class="text"><div class="title">${esc(title)}</div><div class="desc">${esc(desc)}</div></div><div class="controls">${controls}</div></div>`;
+}
+
+// While a download runs, poll its progress; when it ends, reload everything.
+let localPoll = null;
+function watchLocal() {
+  clearTimeout(localPoll);
+  if (!S.local?.installing) return;
+  localPoll = setTimeout(async () => {
+    try {
+      const { local } = await api("/api/local");
+      S.local = local;
+      if (local.installing) return renderLocal(), watchLocal();
+      delete lib.voices.local;
+      toast(local.ready ? "The local voice is ready" : "The download stopped: " + (local.error ?? "unknown error"));
+      refresh();
+    } catch { watchLocal(); }
+  }, 700);
 }
 
 // What still needs recording in the selected voice, or null. record: whether "Record now" can run.
 function voiceNote() {
   const c = S.config, cost = S.recordCost[c.voice] ?? 0, info = infoOf(c.voice) ?? {}, pname = PROVIDER[info.provider];
-  const custom = isCustom(c.voice);
+  const custom = isCustom(c.voice), local = info.provider === "local";
   if (!cost) return custom ? { text: `All alerts are recorded in ${info.name}.` } : null;
-  if (!S.keys[info.provider]) {
+  if (!canRecord(info.provider)) {
     return { text: custom
-      ? `Add a ${pname} key below to record alerts in ${info.name}. Until then you'll hear the ${voiceName(info.fallback)} voice.`
+      ? (local ? `Download the local voice below to hear ${info.name}.` : `Add a ${pname} key below to record alerts in ${info.name}.`) + ` Until then you'll hear the ${voiceName(info.fallback)} voice.`
       : `Add a ${pname} key below to record your edited lines. Until then you'll hear the original ones.` };
   }
+  if (local) return { record: true, text: `Each alert is made in ${info.name} on your Mac the first time it plays, for free. Making all of them now takes a minute or two.` };
   return { record: true, text: custom
     ? `Each alert is recorded in ${info.name} the first time it plays. Recording all of them now uses about ${num(cost)} ${pname} characters.`
     : `Your edited wording isn't recorded in this voice yet: about ${num(cost)} ${pname} characters.` };
@@ -942,6 +996,7 @@ function renderLibrary() {
   document.querySelectorAll("[data-lib]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lib === lib.provider)));
   const list = lib.voices[lib.provider], q = $("#libSearch").value.trim().toLowerCase();
   const added = new Set(S.config.custom_voices.map((v) => v.provider + ":" + v.provider_id));
+  if (lib.provider === "local" && !S.local?.ready) return ($("#libList").innerHTML = '<div class="row"><div class="text"><div class="desc">Download the local voice below to use these voices. It\'s free and runs on your Mac.</div></div></div>');
   if (lib.provider === "elevenlabs" && !S.keys.elevenlabs) return ($("#libList").innerHTML = '<div class="row"><div class="text"><div class="desc">Add your ElevenLabs key below to see the voices in your account.</div></div></div>');
   if (lib.error) return ($("#libList").innerHTML = `<div class="row"><div class="text"><div class="desc">Couldn't load voices: ${esc(lib.error)}</div></div></div>`);
   if (!list) return ($("#libList").innerHTML = '<div class="row"><div class="text"><div class="desc">Loading voices…</div></div></div>');
@@ -954,7 +1009,9 @@ function renderLibrary() {
         ${added.has(v.provider + ":" + v.provider_id) ? '<span class="unit">Added</span>' : `<button class="btn" data-lib-add="${esc(v.provider_id)}">Add</button>`}
       </div>
     </div>`).join("") : '<div class="row"><div class="text"><div class="desc">No voices match.</div></div></div>')
-    + `<div class="row"><div class="text"><div class="desc">${lib.provider === "elevenlabs"
+    + `<div class="row"><div class="text"><div class="desc">${lib.provider === "local"
+      ? "These voices run on your Mac with Kokoro. Previews play here in the browser and cost nothing; each one takes a few seconds the first time. Alpha and Omega are Hindi voices reading English, so hear them before you pick one."
+      : lib.provider === "elevenlabs"
       ? "These are the voices in your ElevenLabs account. To use one from the ElevenLabs Voice Library, add it to My Voices on elevenlabs.io, then reopen this list. Previews play here in the browser and are free."
       : "Sarvam voices speak Indian English. Add one, then press its play button to hear it on your Mac (about 30 characters)."}</div></div></div>`;
 }
@@ -963,7 +1020,7 @@ async function loadLibrary(provider) {
   lib.provider = provider;
   lib.error = null;
   renderLibrary();
-  if (lib.voices[provider] || (provider === "elevenlabs" && !S.keys.elevenlabs)) return;
+  if (lib.voices[provider] || (provider === "elevenlabs" && !S.keys.elevenlabs) || (provider === "local" && !S.local?.ready)) return;
   try { lib.voices[provider] = (await api("/api/library?provider=" + provider)).voices; }
   catch (e) { lib.error = e.message; }
   renderLibrary();
@@ -973,7 +1030,7 @@ function wordingCount() {
   const el = $("#wordingText");
   if (!el) return;
   const info = infoOf(S.config.voice) ?? {};
-  $("#wordingCount").textContent = el.value.trim().length + " characters" + (S.keys[info.provider] ? "" : ", needs a " + PROVIDER[info.provider] + " key");
+  $("#wordingCount").textContent = el.value.trim().length + " characters" + (canRecord(info.provider) ? "" : info.provider === "local" ? ", needs the local voice" : ", needs a " + PROVIDER[info.provider] + " key");
 }
 
 let previewAudio = null;
@@ -1032,10 +1089,32 @@ document.addEventListener("click", (e) => {
     return save(true);
   }
   if (b.dataset.test) return play(b.dataset.test);
-  if (b.id === "addVoice") { lib.open = !lib.open; render(); if (lib.open) { loadLibrary(lib.provider); $("#library").scrollIntoView({ behavior: "smooth", block: "nearest" }); } return; }
+  if (b.id === "addVoice" || b.dataset.localPick !== undefined) {
+    lib.open = b.id === "addVoice" ? !lib.open : true;
+    // Open on the free voices unless the user picked a tab, or has an ElevenLabs key and no local voice.
+    if (!lib.chosen) lib.provider = S.keys.elevenlabs && !S.local?.ready ? "elevenlabs" : "local";
+    render();
+    if (lib.open) { loadLibrary(lib.provider); $("#library").scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+    return;
+  }
   if (b.dataset.libClose !== undefined) { lib.open = false; previewAudio?.pause(); return render(); }
-  if (b.dataset.lib) return loadLibrary(b.dataset.lib);
-  if (b.dataset.libPreview) { previewAudio?.pause(); previewAudio = new Audio(b.dataset.libPreview); previewAudio.play().catch(() => toast("Couldn't play the preview")); return; }
+  if (b.dataset.lib) { lib.chosen = true; return loadLibrary(b.dataset.lib); }
+  if (b.dataset.libPreview) {
+    previewAudio?.pause();
+    if (b.dataset.libPreview.startsWith("/api/local/")) toast("Making a sample on your Mac…");
+    previewAudio = new Audio(b.dataset.libPreview);
+    previewAudio.play().catch(() => toast("Couldn't play the preview"));
+    return;
+  }
+  if (b.dataset.localInstall !== undefined) {
+    b.disabled = true;
+    api("/api/local/install", {}).then((r) => { S.local = r.local; render(); }).catch((err) => { toast(err.message); b.disabled = false; });
+    return;
+  }
+  if (b.dataset.localRemove !== undefined) {
+    api("/api/local/remove", {}).then((s) => { S = s; delete lib.voices.local; render(); toast("Local voice removed"); }).catch((err) => toast(err.message));
+    return;
+  }
   if (b.dataset.libAdd) {
     const v = lib.voices[lib.provider].find((x) => x.provider_id === b.dataset.libAdd);
     api("/api/voices/add", v).then((s) => { S = s; render(); toast(v.name + " added and selected"); }).catch((err) => toast(err.message));
@@ -1050,7 +1129,7 @@ document.addEventListener("click", (e) => {
     b.disabled = true;
     b.textContent = "Recording…";
     api("/api/voices/record", { voice: S.config.voice })
-      .then((r) => { S = r.state; render(); toast(r.note ? "Stopped: " + r.note : "Recorded, " + num(r.spent) + " characters"); })
+      .then((r) => { S = r.state; render(); toast(r.note ? "Stopped: " + r.note : infoOf(S.config.voice)?.provider === "local" ? "Every alert is ready" : "Recorded, " + num(r.spent) + " characters"); })
       .catch((err) => { toast(err.message); render(); });
     return;
   }
@@ -1065,7 +1144,8 @@ document.addEventListener("click", (e) => {
     api("/api/wording", { id, text })
       .then((r) => {
         S = r.state; editing = null; render();
-        toast(!text ? "Back to the original words" : r.note ? "Saved. Not recorded yet: " + r.note : "Saved and recorded, " + num(r.spent) + " characters");
+        const free = infoOf(S.config.voice)?.provider === "local";
+        toast(!text ? "Back to the original words" : r.note ? "Saved. Not recorded yet: " + r.note : free ? "Saved and made on your Mac" : "Saved and recorded, " + num(r.spent) + " characters");
         if (text && !r.note) play(id);
       })
       .catch((err) => { toast(err.message); b.disabled = false; });

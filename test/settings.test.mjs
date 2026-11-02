@@ -2,11 +2,13 @@ import { DATA } from "./helpers.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { createServer } from "node:net";
 import { after, before, test } from "node:test";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PINNED } from "../local.mjs";
 
 const SETTINGS = fileURLToPath(new URL("../settings.mjs", import.meta.url));
 let port, child;
@@ -87,5 +89,30 @@ test("settings API: bad bodies get a clear error, and the state never holds a ke
   // Without a key, the key-only features stay off whatever the page sends.
   const saved = JSON.parse((await post("/api/config", { ...state.config, project_names: { enabled: true }, live: { enabled: true } })).body);
   assert.equal(saved.config.project_names.enabled, false);
+  assert.equal(saved.config.live.enabled, false);
+});
+
+test("settings API: the local voice unlocks project names and Claude's lines, and removing it locks them", async () => {
+  const before = JSON.parse((await http("GET", "/api/local")).body).local;
+  assert.equal(before.ready, false);
+  assert.equal(before.installing, null);
+  // A downloaded voice, as far as the server can tell (nothing here speaks).
+  const dir = join(DATA, "local");
+  mkdirSync(join(dir, "engine"), { recursive: true });
+  mkdirSync(join(dir, "model"), { recursive: true });
+  writeFileSync(join(dir, "engine", "sherpa-onnx.node"), "");
+  writeFileSync(join(dir, "model", PINNED.file), "");
+  writeFileSync(join(dir, "installed.json"), JSON.stringify({ engine: PINNED.engine, model: PINNED.model }));
+  const state = JSON.parse((await http("GET", "/api/state")).body);
+  assert.equal(state.local.ready, true);
+  let saved = JSON.parse((await post("/api/config", { ...state.config, project_names: { enabled: true }, live: { enabled: true } })).body);
+  assert.equal(saved.config.project_names.enabled, true);
+  assert.equal(saved.config.live.enabled, true);
+  const voices = JSON.parse((await http("GET", "/api/library?provider=local")).body).voices;
+  assert.match(voices[0].preview, /^\/api\/local\/preview\?voice=/);
+  assert.equal((await http("GET", "/api/local/preview?voice=zz_nobody")).status, 404);
+  saved = JSON.parse((await post("/api/local/remove", {})).body);
+  assert.equal(saved.local.ready, false);
+  assert.equal(saved.config.project_names.enabled, false, "no key and no local voice: off again");
   assert.equal(saved.config.live.enabled, false);
 });

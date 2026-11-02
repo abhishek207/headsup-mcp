@@ -2,20 +2,22 @@
 // (project names, edited wording, library voices, Claude's own lines). Uses the
 // user's own ElevenLabs or Sarvam key: from the environment (ELEVENLABS_API_KEY,
 // SARVAM_API_KEY) or the macOS Keychain. Keys are never written to config files
-// and never returned to the page.
+// and never returned to the page. The free local voice (local.mjs) needs no key.
 // HEADS_UP_FAKE_TTS=1 (tests) returns a short generated tone instead of calling a provider.
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { LOCAL_VOICES, localReady, speakLocal } from "./local.mjs";
 import { ROOT } from "./paths.mjs";
 
 // MCP servers and hooks can start with a minimal PATH; make system tools and Homebrew findable.
 process.env.PATH = [...new Set([...(process.env.PATH ?? "").split(":").filter(Boolean), "/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"])].join(":");
 
 export const VOICES = JSON.parse(readFileSync(join(ROOT, "voices.json"), "utf8"));
-export const PROVIDERS = ["elevenlabs", "sarvam"];
+export const PROVIDERS = ["elevenlabs", "sarvam"]; // the ones that need the user's key
+export const VOICE_PROVIDERS = [...PROVIDERS, "local"];
 const PAUSE_S = 0.6;
 
 const ENV = { elevenlabs: "ELEVENLABS_API_KEY", sarvam: "SARVAM_API_KEY" };
@@ -38,7 +40,8 @@ export function keySource(provider) {
 }
 
 const fake = () => process.env.HEADS_UP_FAKE_TTS === "1";
-export const hasKey = (provider) => fake() || keySource(provider) !== null;
+// Whether a provider can record right now: a key, or for the local voice, the download.
+export const hasKey = (provider) => fake() || (provider === "local" ? localReady() : keySource(provider) !== null);
 
 function getKey(provider) {
   if (fake()) return "fake";
@@ -98,13 +101,14 @@ async function sarvam(speaker, text, key) {
   return { data: Buffer.from(audios[0], "base64"), ext: "wav" };
 }
 
-export const PROVIDER_NAMES = { elevenlabs: "ElevenLabs", sarvam: "Sarvam" };
+export const PROVIDER_NAMES = { elevenlabs: "ElevenLabs", sarvam: "Sarvam", local: "local voice" };
 
 // Synthesize text in a voice: a built-in voice name, or any { provider, provider_id }
 // (a voice from the user's own library). Throws if the provider has no key.
 export async function synth(voice, text, opts = {}) {
   const v = typeof voice === "string" ? VOICES[voice] : voice;
-  if (!v || !PROVIDERS.includes(v.provider)) throw new Error(`unknown voice ${typeof voice === "string" ? voice : v?.provider_id}`);
+  if (!v || !VOICE_PROVIDERS.includes(v.provider)) throw new Error(`unknown voice ${typeof voice === "string" ? voice : v?.provider_id}`);
+  if (v.provider === "local") return { data: fake() ? tone(0.2 + text.length / 40) : await speakLocal(v.provider_id, text), ext: "wav" };
   const key = getKey(v.provider);
   if (!key) throw new Error(`no ${PROVIDER_NAMES[v.provider]} key`);
   if (fake()) return { data: tone(0.2 + text.length / 40), ext: "wav" };
@@ -135,8 +139,13 @@ export const SARVAM_SPEAKERS = [
 
 // Voices the user can pick from their provider: for ElevenLabs, everything in their own
 // account (premade voices plus any they added from the Voice Library). Costs nothing.
+// Local voices preview through the settings page once the voice is downloaded.
 export async function providerVoices(provider) {
   if (provider === "sarvam") return SARVAM_SPEAKERS;
+  if (provider === "local") {
+    const ready = localReady();
+    return LOCAL_VOICES.map((v) => ({ provider, provider_id: v.id, name: v.name, accent: v.accent, gender: v.gender, about: v.about, preview: ready ? `/api/local/preview?voice=${v.id}` : null }));
+  }
   if (provider !== "elevenlabs") throw new Error("unknown provider");
   const key = getKey(provider);
   if (!key) throw new Error("no ElevenLabs key");

@@ -5,8 +5,9 @@
 //   headsup mute [min]   mute for N minutes (default 60); unmute to undo
 //   headsup status       show what would happen right now
 //   headsup test [id]    play an alert now, ignoring guardrails
-//   headsup say <words>  speak your own line now with your key (like Claude's messages)
+//   headsup say <words>  speak your own line now with your key or the local voice (like Claude's messages)
 //   headsup usage        characters sent to your voice providers
+//   headsup local [install | remove]   the free local voice: status, download it, or delete it
 //   headsup version      version and maker
 //   headsup install      install the plugin in Claude Code (and Codex); uninstall to undo
 //   headsup serve        run the MCP server on stdio (what `npx headsup-mcp serve` starts for other MCP clients)
@@ -16,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT, STATUSES, activeFocus, alert, blockedReason, currentLocation, detectorProblems, loadConfig, probeDetectors, saveConfig } from "./core.mjs";
 import { usageSummary } from "./speech.mjs";
-import { elevenUsage, keySource } from "./tts.mjs";
+import { PROVIDERS, elevenUsage, keySource } from "./tts.mjs";
 
 const PORT = 4777;
 const URL = `http://127.0.0.1:${PORT}`;
@@ -68,6 +69,8 @@ switch (cmd) {
     console.log(`Voice:    ${c.custom_voices.find((v) => v.id === c.voice)?.name ?? c.voice}`);
     console.log(`Live:     ${c.live.enabled ? `on, up to ${c.live.max_chars} characters a line, ${c.live.daily_chars} a day` : "off"}`);
     console.log(`Keys:     ElevenLabs ${keySource("elevenlabs") ?? "none"}, Sarvam ${keySource("sarvam") ?? "none"}`);
+    const local = (await import("./local.mjs")).localStatus();
+    console.log(`Local:    ${local.ready ? `ready, ${local.voices} voices` : local.supported ? "not downloaded (headsup local install)" : "not available here"}`);
     console.log(`Location: ${here.location ?? "unsaved network"}${c.location_lock ? " (location lock on)" : ""}`);
     const probe = probeDetectors();
     const m = probe.media;
@@ -107,6 +110,35 @@ switch (cmd) {
     if (a) console.log(`ElevenLabs plan: ${a.used} of ${a.limit} credits used${a.resets ? `, resets ${new Date(a.resets).toLocaleDateString()}` : ""}`);
     break;
   }
+  case "local": {
+    const { installLocal, localStatus, removeLocal } = await import("./local.mjs");
+    if (arg === "install") {
+      let shown = "";
+      const show = (p) => {
+        const line = { unpacking: "Unpacking…", checking: "Checking that it speaks…" }[p.step] ?? `Downloading the ${p.step}: ${Math.floor((100 * p.done) / p.total)}%`;
+        if (line !== shown) process.stderr.write(`\r${(shown = line).padEnd(40)}`);
+      };
+      try {
+        await installLocal({ onProgress: show });
+        process.stderr.write("\n");
+        console.log("The local voice is ready. Pick one of its voices on the settings page: run headsup.");
+      } catch (e) {
+        process.stderr.write("\n");
+        console.error(`The local voice wasn't installed: ${e.message}`);
+        process.exit(1);
+      }
+    } else if (arg === "remove") {
+      removeLocal();
+      // Like removing the last key on the settings page: the features that need one switch off.
+      if (!PROVIDERS.some((p) => keySource(p))) saveConfig({ ...c, project_names: { ...c.project_names, enabled: false }, live: { ...c.live, enabled: false } });
+      console.log("The local voice is removed.");
+    } else {
+      const s = localStatus();
+      const mb = (n) => `${Math.round(n / 1e6)} MB`;
+      console.log(s.ready ? `Ready: ${s.voices} voices, about ${mb(s.disk)} on disk. Remove it with: headsup local remove` : s.supported ? `Not downloaded. Get it with: headsup local install (${mb(s.download)}, about ${mb(s.disk)} on disk)` : "Not available on this computer.");
+    }
+    break;
+  }
   case "serve":
     // Nothing else may write to stdout from here on: it carries the JSON-RPC replies.
     await import("./server.mjs");
@@ -123,6 +155,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert] | say <words> | usage | install | uninstall | version]");
+    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert] | say <words> | usage | local [install | remove] | install | uninstall | version]");
     console.log(`Alerts: ${Object.keys(STATUSES).join(", ")}`);
 }

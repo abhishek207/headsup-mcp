@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // heads-up: a tiny zero-dependency MCP server (stdio) that plays a short
 // voice line on the Mac speaker so the user hears when Claude needs them or has
-// finished: a pre-recorded line, or Claude's own words recorded with the user's
-// ElevenLabs or Sarvam key. Guardrails and settings live in core.mjs and
+// finished: a pre-recorded line, or Claude's own words recorded with the free
+// local voice or the user's ElevenLabs or Sarvam key. Guardrails and settings live in core.mjs and
 // config.json; run `headsup` for the settings page.
 
 import { resolve, sep } from "node:path";
@@ -77,7 +77,7 @@ async function handle(msg) {
       return {
         protocolVersion: msg.params?.protocolVersion ?? "2025-06-18",
         capabilities: { tools: {} },
-        serverInfo: { name: "heads-up", version: "1.5.5" },
+        serverInfo: { name: "heads-up", version: "1.6.0" },
       };
     case "ping":
       return {};
