@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { DATA, ROOT } from "./paths.mjs";
+import { DATA, ROOT, claudeAppData } from "./paths.mjs";
 import * as platform from "./platform/index.mjs";
 import { MAC } from "./platform/common.mjs";
 import { Skip, cleanMessage, compose, composeStream, costOf, streamable, voiceInfo } from "./speech.mjs";
@@ -536,7 +536,7 @@ export function sessionTitle(env = process.env, sessionId = env.CLAUDE_CODE_SESS
   try {
     const host = env.CLAUDE_CODE_HOST_SESSION_ID;
     if (host && id.test(host)) {
-      const base = join(home, "Library", "Application Support", "Claude", "claude-code-sessions");
+      const base = join(claudeAppData(process.platform, env, home), "claude-code-sessions");
       const [acct, org] = [env.CLAUDE_CODE_ACCOUNT_UUID, env.CLAUDE_CODE_ORGANIZATION_UUID];
       const dirs = acct && org && id.test(acct) && id.test(org) && existsSync(join(base, acct, org))
         ? [join(base, acct, org)]

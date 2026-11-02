@@ -6,9 +6,10 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 const { sessionTitle, alert, loadHistory, saveConfig, normalize } = await import("../core.mjs");
+const { claudeAppData } = await import("../paths.mjs");
 
 const home = join(DATA, "home");
-const app = join(home, "Library", "Application Support", "Claude", "claude-code-sessions", "acct-0001", "org-00001");
+const app = join(claudeAppData(process.platform, {}, home), "claude-code-sessions", "acct-0001", "org-00001");
 mkdirSync(app, { recursive: true });
 const session = (host, body) => writeFileSync(join(app, `${host}.json`), JSON.stringify(body));
 session("local_aaaa1111", { cliSessionId: "cli-aaaa1111", title: "Fix Brivi Chrome and Safari extensions" });

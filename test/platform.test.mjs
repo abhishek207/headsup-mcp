@@ -11,7 +11,7 @@ import { test } from "node:test";
 const linux = await import("../platform/linux.mjs");
 const win = await import("../platform/win32.mjs");
 const darwin = await import("../platform/darwin.mjs");
-const { defaultData } = await import("../paths.mjs");
+const { defaultData, claudeAppData } = await import("../paths.mjs");
 const install = await import("../tools/install.mjs");
 
 const INTERFACE = ["words", "chimes", "extraPath", "play", "audioReady", "getVolume", "setVolume", "outputDevice", "mediaInUse", "callsReady", "callsSetup", "focusReadable", "activeFocus", "focusUnreadable", "idleSeconds", "currentNetworks", "secretRead", "secretSave", "secretDelete", "secretDeleteHint", "openUrl"];
@@ -28,6 +28,10 @@ test("data folder per platform", () => {
   assert.equal(defaultData("linux", {}, "/home/a"), "/home/a/.local/share/heads-up");
   assert.equal(defaultData("linux", { XDG_DATA_HOME: "/data" }, "/home/a"), "/data/heads-up");
   assert.match(defaultData("win32", { LOCALAPPDATA: "C:\\Users\\a\\AppData\\Local" }, "C:\\Users\\a"), /AppData.Local.heads-up$/);
+  // The Claude desktop app's folder (for chat titles).
+  assert.equal(claudeAppData("darwin", {}, "/Users/a"), "/Users/a/Library/Application Support/Claude");
+  assert.equal(claudeAppData("linux", {}, "/home/a"), "/home/a/.config/Claude");
+  assert.match(claudeAppData("win32", { APPDATA: "C:\\Users\\a\\AppData\\Roaming" }, "C:\\Users\\a"), /Roaming.Claude$/);
 });
 
 // pactl list sinks (PipeWire's pactl, C locale), trimmed.
