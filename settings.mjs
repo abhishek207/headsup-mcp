@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import { GREETING, HARD_CAP, PLATFORM_WORDS, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isPlaying, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, stopPlaying, textFor } from "./core.mjs";
+import { AGENT_INSTRUCTIONS_MAX, GREETING, HARD_CAP, PLATFORM_WORDS, ROOT, TEMPLATES, activeFocus, agentInstructions, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isPlaying, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, stopPlaying, textFor } from "./core.mjs";
 import { LOCAL_DIR, LOCAL_VOICES, MODELS, installLocal, installedModel, isModel, localReady, localStatus, removeLocal } from "./local.mjs";
 import { composed, usageSummary, voiceInfo } from "./speech.mjs";
 import { PROVIDERS, cachedSegment, checkKey, deleteKey, elevenUsage, keySource, providerVoices, saveKey, segKey, synth } from "./tts.mjs";
@@ -72,6 +72,8 @@ async function state() {
     account: { elevenlabs: keys.elevenlabs ? await elevenAccount() : null },
     // Characters still needed to record every alert in each voice (built-in voices: only edited lines).
     recordCost: Object.fromEntries(listVoices(config).map((v) => [v, recordingCost(v, config)])),
+    // The user's instructions for agents, exactly as agents will read them.
+    agents: { max: AGENT_INSTRUCTIONS_MAX, preview: agentInstructions(config) },
   };
 }
 

@@ -120,3 +120,19 @@ test("package: every root module ships, and the dev tools don't", () => {
   for (const f of readdirSync(root).filter((f) => f.endsWith(".mjs"))) assert.ok(pkg.files.includes(f), `${f} is missing from files`);
   assert.ok(!pkg.files.some((f) => f.includes("*")), "no globs: they also match tools/ and test/");
 });
+
+test("MCP server: the user's instructions for agents reach the server instructions and the tool description", () => {
+  const file = join(DATA, "config.json");
+  const plain = rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, { jsonrpc: "2.0", id: 2, method: "tools/list" });
+  const before = readFileSync(file, "utf8"); // the first run wrote the defaults
+  assert.equal(plain[1].result.instructions, undefined);
+  assert.doesNotMatch(plain[2].result.tools[0].description, /own instructions/);
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(before), agent_instructions: "Start with what you need from me." }));
+  try {
+    const out = rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, { jsonrpc: "2.0", id: 2, method: "tools/list" });
+    assert.match(out[1].result.instructions, /Start with what you need from me\.$/);
+    assert.match(out[2].result.tools[0].description, /theirs win:\nStart with what you need from me\.$/);
+  } finally {
+    writeFileSync(file, before);
+  }
+});

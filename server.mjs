@@ -10,12 +10,14 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, maxChars, projectFor, sessionTitle, textFor } from "./core.mjs";
+import { ROOT, STATUSES, TEMPLATES, agentInstructions, alert, detectorProblems, loadConfig, maxChars, projectFor, sessionTitle, textFor } from "./core.mjs";
 import { voiceInfo } from "./speech.mjs";
 
 const config = loadConfig();
 const LOCAL = voiceInfo(config.voice, config)?.provider === "local"; // free, so Claude can say as much as it needs
 const PREPARE_WAIT_MS = 15_000; // how long the tool waits for a live line to be recorded
+// The user's instructions for agents, from the settings page. Read once, when the session starts.
+const USER_NOTE = agentInstructions(config);
 
 const TOOL = {
   name: "notify_user",
@@ -23,7 +25,8 @@ const TOOL = {
     "Play a short spoken alert on the user's computer speakers so they can come back to it. " +
     "Call it once at the end of a turn (or when starting something long), picking the status that matches why you stopped:\n" +
     TEMPLATES.map((t) => `- ${t.id}: ${t.when} ("${textFor(t.id, config)}")`).join("\n") +
-    "\nTheir settings (off switch, mute, quiet hours, location lock, cooldown) may block it; a skipped alert is not an error, so don't retry.",
+    "\nTheir settings (off switch, mute, quiet hours, location lock, cooldown) may block it; a skipped alert is not an error, so don't retry." +
+    (USER_NOTE ? "\n\n" + USER_NOTE : ""),
   inputSchema: {
     type: "object",
     properties: {
@@ -152,6 +155,8 @@ async function handle(msg) {
         protocolVersion: msg.params?.protocolVersion ?? "2025-06-18",
         capabilities: { tools: {} },
         serverInfo: { name: "heads-up", version: "1.7.0" },
+        // Claude Code puts server instructions in the agent's system prompt.
+        ...(USER_NOTE && { instructions: USER_NOTE }),
       };
     case "ping":
       return {};

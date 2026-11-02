@@ -28,10 +28,22 @@ function plainWord(word) {
   if (/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(core)) return `${lead}an email address${tail}`;
   const slashes = core.split("/").length - 1;
   if (slashes && (/^(~|\.{1,2})?\//.test(core) || slashes > 1 || /\/[^/]*\.\w{1,5}$/.test(core))) return `${lead}a file${tail}`;
-  const mixed = (part) => part.length >= 6 && /\d/.test(part) && /[A-Za-z]/.test(part);
-  if (core.length >= 20 && /^[\w+/=.-]+$/.test(core) && core.split(/[-_.]/).some(mixed)) return `${lead}a code${tail}`;
+  if (looksLikeKey(core)) return `${lead}a code${tail}`;
   return word;
 }
+
+// A key, token or hash: a long run of word characters with a part that mixes letters and digits.
+function looksLikeKey(core) {
+  const mixed = (part) => part.length >= 6 && /\d/.test(part) && /[A-Za-z]/.test(part);
+  return core.length >= 20 && /^[\w+/=.-]+$/.test(core) && core.split(/[-_.]/).some(mixed);
+}
+
+// Text kept as written (the user's instructions for agents), minus anything that looks like a key.
+export const withoutKeys = (text) =>
+  String(text ?? "").replace(/\S+/g, (word) => {
+    const [, lead, core, tail] = word.match(/^([("'“‘]*)(.*?)([)"'”’.,;:!?]*)$/s);
+    return looksLikeKey(core) ? `${lead}[removed]${tail}` : word;
+  });
 
 // Claude's text made speakable: no code, links, paths, keys or markdown, one line, at most
 // max characters (cut at a word), ending in punctuation. Empty if nothing speakable is left.

@@ -164,7 +164,7 @@
       radial-gradient(50vw 50vw at 10% 100%, var(--wash-4), transparent 60%),
       var(--base);
   }
-  button, input { font: inherit; color: inherit; letter-spacing: inherit; }
+  button, input, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
   :focus-visible { outline: 2px solid var(--accent-a); outline-offset: 2px; border-radius: 8px; }
   .val, input[type=number] { font-variant-numeric: tabular-nums; }
 
@@ -374,6 +374,20 @@
   .count { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
   .icon.small svg { width: 12px; height: 12px; margin: 0; }
 
+  /* Instructions for agents */
+  .row.block { display: block; }
+  .area { display: block; width: 100%; height: auto; min-height: 140px; padding: 12px 14px; line-height: 1.5; resize: vertical; }
+  .ideas { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    height: 30px; padding: 0 12px; border: 0; border-radius: 999px; cursor: pointer;
+    background: var(--track-off); color: var(--ink-2); font-size: 13px; font-weight: 500;
+  }
+  .chip:hover:not(:disabled) { background: var(--glass-strong); color: var(--ink); }
+  .chip:disabled { opacity: .4; cursor: default; }
+  .peek { margin: 12px 4px 0; font-size: 13px; color: var(--ink-2); }
+  .peek summary { cursor: pointer; font-weight: 600; width: fit-content; }
+  .peek pre { margin: 10px 0 0; padding: 14px 16px; border-radius: 16px; background: var(--field); color: var(--ink); white-space: pre-wrap; font: 13px/1.55 var(--font); }
+
   #toast {
     position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 8px);
     padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 500;
@@ -538,6 +552,30 @@
       </div>
       <h3>What it has cost</h3>
       <div class="group" id="usage"></div>
+    </section>
+
+    <section id="agents">
+      <h2>Instructions for agents</h2>
+      <p class="lede">Tell Claude, or any agent that uses Heads-up, when to alert you and what to say. Agents read this when a session starts, so sessions already open pick up a change after a restart. Your switches, quiet times and volume caps still decide what plays.</p>
+      <div class="group">
+        <div class="row block">
+          <textarea class="field area" id="agentText" rows="6" maxlength="1500" aria-label="Instructions for agents" placeholder="Say what you need from me first, then which task it is. Keep it to one sentence. Don't alert me for small tasks."></textarea>
+        </div>
+        <div class="row block">
+          <div class="ideas" id="agentIdeas"></div>
+        </div>
+        <div class="row">
+          <div class="text"><div class="title" id="agentState">No instructions yet</div><div class="desc" id="agentCount"></div></div>
+          <div class="controls">
+            <button class="btn" id="agentClear">Clear</button>
+            <button class="btn primary" id="agentSave">Save</button>
+          </div>
+        </div>
+      </div>
+      <details class="peek" id="agentPeek">
+        <summary>What agents read</summary>
+        <pre id="agentPreview"></pre>
+      </details>
     </section>
 
     <section>
@@ -849,6 +887,8 @@ function render() {
     else if (document.activeElement !== el) el.value = el.dataset.scale ? Math.round(v / el.dataset.scale) : v;
   });
 
+  renderAgents();
+
   // Project names and Claude's own lines need a key or the local voice; the server keeps them off without either.
   const anyKey = Boolean(S.keys.elevenlabs || S.keys.sarvam || S.local?.ready);
   for (const k of ["live.enabled", "project_names.enabled"]) $(`[data-k="${k}"]`).disabled = !anyKey;
@@ -1094,6 +1134,51 @@ async function loadLibrary(provider) {
   renderLibrary();
 }
 
+/* Instructions for agents: a draft in the box until Save; agents read the saved text at session start. */
+const AGENT_IDEAS = [
+  "Keep every line under 15 words.",
+  "Start with what you need from me, then name the task.",
+  "When you need a decision, give me the options and your pick.",
+  "Don't alert me for tasks that took under 5 minutes.",
+  "Only use repeat 2 when something failed.",
+];
+const agentDraft = () => $("#agentText").value.trim();
+const agentDirty = () => agentDraft() !== S.config.agent_instructions;
+
+function agentStatus() {
+  const n = agentDraft().length, dirty = agentDirty();
+  $("#agentState").textContent = dirty ? "Not saved yet" : S.config.agent_instructions ? "Agents read this when a session starts" : "No instructions yet";
+  $("#agentCount").textContent = n
+    ? num(n) + " of " + num(S.agents.max) + " characters"
+    : dirty ? "Saving an empty box removes your instructions" : "Agents follow Heads-up's own guidance";
+  $("#agentSave").disabled = !dirty;
+  $("#agentClear").disabled = !$("#agentText").value;
+  const text = $("#agentText").value;
+  $("#agentIdeas").querySelectorAll("[data-idea]").forEach((b) => { b.disabled = text.includes(AGENT_IDEAS[b.dataset.idea]); });
+}
+
+function renderAgents() {
+  const box = $("#agentText");
+  if (!$("#agentIdeas").children.length) $("#agentIdeas").innerHTML = AGENT_IDEAS.map((t, i) => `<button class="chip" data-idea="${i}">+ ${esc(t)}</button>`).join("");
+  if (document.activeElement !== box && !box.dataset.draft) box.value = S.config.agent_instructions;
+  $("#agentPeek").hidden = !S.agents.preview;
+  $("#agentPreview").textContent = S.agents.preview;
+  agentStatus();
+}
+
+async function saveAgents() {
+  const text = agentDraft();
+  try {
+    S = await api("/api/config", { ...S.config, agent_instructions: text });
+    const saved = S.config.agent_instructions;
+    delete $("#agentText").dataset.draft;
+    $("#agentText").value = saved;
+    render();
+    const keys = (saved.match(/\[removed\]/g) || []).length > (text.match(/\[removed\]/g) || []).length;
+    toast(keys ? "Saved. Something that looked like a key was taken out" : saved ? "Saved. New sessions will read it" : "Instructions removed");
+  } catch (e) { toast("Couldn't save: " + e.message); }
+}
+
 function wordingCount() {
   const el = $("#wordingText");
   if (!el) return;
@@ -1130,11 +1215,13 @@ document.addEventListener("input", (e) => {
   if (e.target.type === "range") { fill(e.target); e.target.nextElementSibling.textContent = e.target.dataset.k === "local.speed" ? speedLabel(e.target.value) : e.target.value + "%"; }
   if (e.target.id === "libSearch") renderLibrary();
   if (e.target.id === "wordingText") wordingCount();
+  if (e.target.id === "agentText") { e.target.dataset.draft = "1"; agentStatus(); }
   if (e.target.id === "sayText") $("#sayCount").textContent = e.target.value.trim() ? e.target.value.trim().length + " characters" : "";
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.id === "wordingText") $("[data-wording-save]")?.click();
   if (e.key === "Enter" && e.target.id === "sayText") $("#sayBtn").click();
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && e.target.id === "agentText" && agentDirty()) saveAgents();
   if (e.key === "Escape" && e.target.id === "wordingText") { editing = null; render(); }
 });
 function setTheme(t) {
@@ -1228,6 +1315,15 @@ document.addEventListener("click", (e) => {
       .catch((err) => { toast(err.message); b.disabled = false; });
     return;
   }
+  if (b.id === "agentSave") return saveAgents();
+  if (b.id === "agentClear") { const box = $("#agentText"); box.value = ""; box.dataset.draft = "1"; box.focus(); return agentStatus(); }
+  if (b.dataset.idea !== undefined) {
+    const box = $("#agentText"), t = box.value.trimEnd();
+    box.value = (t ? t + "\n" : "") + AGENT_IDEAS[b.dataset.idea];
+    box.dataset.draft = "1";
+    box.focus();
+    return agentStatus();
+  }
   if (b.id === "sayBtn") {
     const text = $("#sayText").value.trim();
     if (!text) return toast("Type a line first");
@@ -1283,7 +1379,7 @@ async function refresh() {
   catch { $("#stateTitle").textContent = "Offline"; $("#stateText").textContent = "The settings server stopped. Run headsup to start it again."; }
 }
 refresh();
-setInterval(() => { if (!document.hidden && !document.activeElement?.matches("input")) refresh(); }, 15000);
+setInterval(() => { if (!document.hidden && !document.activeElement?.matches("input, textarea")) refresh(); }, 15000);
 setInterval(() => { if (!document.hidden && S) pollPlaying(); }, 1500);
 </script>
 </body>

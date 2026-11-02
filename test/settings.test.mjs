@@ -92,6 +92,16 @@ test("settings API: bad bodies get a clear error, and the state never holds a ke
   assert.equal(saved.config.live.enabled, false);
 });
 
+test("settings API: instructions for agents save without a key and come back as agents will read them", async () => {
+  const state = JSON.parse((await http("GET", "/api/state")).body);
+  assert.deepEqual(state.agents, { max: 1500, preview: "" });
+  const saved = JSON.parse((await post("/api/config", { ...state.config, agent_instructions: "  Name the task first.  " })).body);
+  assert.equal(saved.config.agent_instructions, "Name the task first.");
+  assert.match(saved.agents.preview, /theirs win:\nName the task first\.$/);
+  const cleared = JSON.parse((await post("/api/config", { ...saved.config, agent_instructions: "" })).body);
+  assert.equal(cleared.agents.preview, "");
+});
+
 test("settings API: the local voice unlocks project names and Claude's lines, and removing it locks them", async () => {
   const before = JSON.parse((await http("GET", "/api/local")).body).local;
   assert.equal(before.ready, false);

@@ -207,3 +207,15 @@ test("play lock: a tampered lock file can't put anything but a volume into the v
     rmSync(bin, { recursive: true, force: true });
   }
 });
+
+test("agent instructions: plain text, capped, no control characters or keys, and framed for agents only when set", () => {
+  assert.equal(normalize({}).agent_instructions, "");
+  assert.equal(normalize({ agent_instructions: 42 }).agent_instructions, "");
+  assert.equal(normalize({ agent_instructions: "  Keep it short.\r\n\r\n\r\n\r\nName the task.\u0007  " }).agent_instructions, "Keep it short.\n\nName the task.");
+  assert.equal(normalize({ agent_instructions: "x".repeat(5000) }).agent_instructions.length, core.AGENT_INSTRUCTIONS_MAX);
+  const key = "sk_" + "a1b2c3d4e5".repeat(4);
+  assert.equal(normalize({ agent_instructions: `Use my key (${key}) please.` }).agent_instructions, "Use my key ([removed]) please.");
+  assert.equal(core.agentInstructions(normalize({})), "");
+  const note = core.agentInstructions(normalize({ agent_instructions: "Keep every line under 15 words." }));
+  assert.match(note, /theirs win:\nKeep every line under 15 words\.$/);
+});

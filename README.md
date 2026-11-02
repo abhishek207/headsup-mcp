@@ -109,6 +109,10 @@ headsup usage        # characters sent to your voice providers
 headsup local install   # download the free local voice (full, or: headsup local install small); headsup local remove
 ```
 
+### Instructions for agents
+
+The settings page has a box where you tell agents when to alert you and what to say, for example "Start with what you need from me, then name the task" or "Don't alert me for tasks that took under 5 minutes". Heads-up keeps the text in its own config and hands it to every agent when a session starts, in the MCP server's instructions and the `notify_user` tool description. Nothing is written into your CLAUDE.md or skill files, so plugin updates never wipe it. Sessions already open pick up a change after a restart. Your switches, quiet times and volume caps still decide what plays.
+
 ## Local voice
 
 A free voice that runs on your computer, for people who want project names and Claude's own words without paying for a key. It's off until you download it. On the settings page, under Local voice, play the sample of each model and of each of the 12 voices, download the one you like, then pick one of its 12 voices under Voice, "On this Mac" ("On this computer" on Linux, "On this PC" on Windows). It runs on macOS (Apple silicon and Intel), Linux (x64 and arm64) and Windows (x64; not yet tried on a real PC). From a terminal: `headsup local install` (full quality) or `headsup local install small`.

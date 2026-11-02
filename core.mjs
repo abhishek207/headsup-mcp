@@ -12,7 +12,7 @@ import { basename, dirname, join } from "node:path";
 import { DATA, ROOT, claudeAppData } from "./paths.mjs";
 import * as platform from "./platform/index.mjs";
 import { MAC } from "./platform/common.mjs";
-import { Skip, cleanMessage, compose, composeStream, costOf, streamable, voiceInfo } from "./speech.mjs";
+import { Skip, cleanMessage, compose, composeStream, costOf, streamable, voiceInfo, withoutKeys } from "./speech.mjs";
 import { LOCAL_VOICES } from "./local.mjs";
 import { VOICE_PROVIDERS, cachedSegment, segKey } from "./tts.mjs";
 
@@ -67,9 +67,13 @@ export const DEFAULTS = {
   // The local voice: speaking speed (1 = normal), and the longest line Claude may say with it.
   // It's free, so the limit is only a guard against runaway text; live.max_chars is for paid voices.
   local: { speed: 1, max_chars: 1000 },
+  // The user's own words on how agents should use the alerts (when to call, what to say).
+  // The MCP server hands them to every agent at session start; no agent files are written.
+  agent_instructions: "",
 };
 
-const LIMITS = { wording_chars: 120, custom_voices: 30 };
+const LIMITS = { wording_chars: 120, custom_voices: 30, agent_instructions: 1500 };
+export const AGENT_INSTRUCTIONS_MAX = LIMITS.agent_instructions;
 const label = (s, n) => String(s ?? "").replace(/[^\p{L}\p{N} .,'&()-]/gu, "").trim().slice(0, n);
 
 // The id a library voice gets in config and in DATA folders: "el-<voice id>", "sarvam-<speaker>",
@@ -176,8 +180,28 @@ export function normalize(c = {}) {
       speed: Number.isFinite(c.local?.speed) ? Math.min(1.5, Math.max(0.7, Math.round(c.local.speed * 20) / 20)) : d.local.speed,
       max_chars: clamp(c.local?.max_chars, 40, 2000, d.local.max_chars),
     },
+    agent_instructions: cleanInstructions(c.agent_instructions),
   };
 }
+
+// Plain text, at most a few short paragraphs, with control characters and anything key-like taken out.
+function cleanInstructions(s) {
+  if (typeof s !== "string") return DEFAULTS.agent_instructions;
+  return withoutKeys(s.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ""))
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, LIMITS.agent_instructions)
+    .trim();
+}
+
+// What the MCP server adds to its instructions and the tool description, so every agent reads the
+// user's instructions when a session starts. Empty when there are none.
+export const agentInstructions = (c) =>
+  c.agent_instructions
+    ? "The user's own instructions for these alerts, from their Heads-up settings. Follow them when you decide whether to " +
+      "call notify_user and what to say; where they differ from the general guidance, theirs win:\n" + c.agent_instructions
+    : "";
 
 function readJson(path, fallback) {
   try {

@@ -53,6 +53,10 @@ The user may have several sessions running at once, and "I need your review" alo
 - No names, code, file paths, ids, links, numbers that need reading, or anything secret. The text may go to the user's text-to-speech provider.
 - Still set the closest `status`. Spoken lines are an opt-in feature that needs the free local voice or the user's own ElevenLabs or Sarvam key; when they're off, or the day's budget is used up, the status's built-in line plays instead.
 
+## The user's own instructions
+
+The user can write instructions for agents on their settings page ("Keep every line under 15 words", "Don't alert me for small tasks"). When they have, they arrive with the tool: at the end of `notify_user`'s description and in the server's instructions. Follow them. Where they differ from this skill, the user's instructions win. Your answer from the tool still decides what happens next: a skipped alert stays skipped.
+
 ## Reading the answer
 
 - `Playing "..."`: done. Carry on or end the turn.
@@ -61,4 +65,4 @@ The user may have several sessions running at once, and "I need your review" alo
 
 ## Settings
 
-The user controls everything on a local page: run `headsup` in a terminal (or open http://127.0.0.1:4777). Point them there if they ask how to change the voice, mute alerts, add a key, or turn on spoken project names.
+The user controls everything on a local page: run `headsup` in a terminal (or open http://127.0.0.1:4777). Point them there if they ask how to change the voice, mute alerts, add a key, turn on spoken project names, or change how agents word and time their alerts (Instructions for agents).
