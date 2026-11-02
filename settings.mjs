@@ -7,7 +7,7 @@ import { createReadStream, mkdirSync, readFileSync, writeFileSync } from "node:f
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { GREETING, HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, textFor } from "./core.mjs";
-import { LOCAL_DIR, LOCAL_VOICES, MODELS, installLocal, isModel, localReady, localStatus, removeLocal } from "./local.mjs";
+import { LOCAL_DIR, LOCAL_VOICES, MODELS, installLocal, installedModel, isModel, localReady, localStatus, removeLocal } from "./local.mjs";
 import { composed, usageSummary, voiceInfo } from "./speech.mjs";
 import { PROVIDERS, cachedSegment, checkKey, deleteKey, elevenUsage, keySource, providerVoices, saveKey, segKey, synth } from "./tts.mjs";
 
@@ -299,13 +299,19 @@ const server = createServer(async (req, res) => {
       if (!anyKey()) saveConfig(keyFeaturesOff(loadConfig()));
       return json(200, await state());
     }
-    // A short sample of a local voice for the library list, made once and kept.
+    // A short sample of a local voice for the library list. The package ships one per voice
+    // from the full model at normal speed; any other model or speed is made once and kept.
     if (req.method === "GET" && url.pathname === "/api/local/preview") {
       const v = LOCAL_VOICES.find((x) => x.id === url.searchParams.get("voice"));
       if (!v) return json(404, { error: "unknown voice" });
-      const text = `Hello, I'm ${v.name}. I'll let you know when Claude needs you.`;
-      const dir = join(LOCAL_DIR, "previews");
       const speed = loadConfig().local.speed; // previews follow the speed setting
+      const shipped = join(ROOT, "assets", "local-samples", "voices", `${v.id}.mp3`);
+      if (!localReady() || (installedModel() === "full" && speed === 1)) {
+        res.writeHead(200, { "content-type": "audio/mpeg", "cache-control": "no-store" });
+        return createReadStream(shipped).pipe(res);
+      }
+      const text = `Hello, I am ${v.name}. I will let you know when Claude needs you.`;
+      const dir = join(LOCAL_DIR, "previews");
       const key = segKey(v.id, text) + (speed !== 1 ? `-x${speed}` : "");
       let file = cachedSegment(dir, key);
       if (!file) {

@@ -104,6 +104,11 @@ test("settings API: the local voice unlocks project names and Claude's lines, an
     assert.equal(r.headers["content-type"], "audio/mpeg");
   }
   for (const bad of ["__proto__", "constructor", "../settings", ""]) assert.equal((await http("GET", `/api/local/sample?model=${encodeURIComponent(bad)}`)).status, 404, bad);
+  // Every voice's sample plays before the download too, from the package (nothing is made).
+  const voice = await http("GET", "/api/local/preview?voice=am_michael");
+  assert.equal(voice.status, 200);
+  assert.equal(voice.headers["content-type"], "audio/mpeg");
+  for (const bad of ["../full", "constructor", "zm_yunxi"]) assert.equal((await http("GET", `/api/local/preview?voice=${encodeURIComponent(bad)}`)).status, 404, bad);
   for (const bad of ["constructor", "toString", "huge", 1]) assert.equal((await post("/api/local/install", { model: bad })).status, 400, String(bad));
   // A downloaded voice, as far as the server can tell (nothing here speaks).
   const dir = join(DATA, "local");

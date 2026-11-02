@@ -140,12 +140,11 @@ export const SARVAM_SPEAKERS = [
 
 // Voices the user can pick from their provider: for ElevenLabs, everything in their own
 // account (premade voices plus any they added from the Voice Library). Costs nothing.
-// Local voices preview through the settings page once the voice is downloaded.
+// Local voices preview through the settings page, from shipped samples until downloaded.
 export async function providerVoices(provider) {
   if (provider === "sarvam") return SARVAM_SPEAKERS;
   if (provider === "local") {
-    const ready = localReady();
-    return LOCAL_VOICES.map((v) => ({ provider, provider_id: v.id, name: v.name, accent: v.accent, gender: v.gender, about: v.about, preview: ready ? `/api/local/preview?voice=${v.id}` : null }));
+    return LOCAL_VOICES.map((v) => ({ provider, provider_id: v.id, name: v.name, accent: v.accent, gender: v.gender, about: v.about, preview: `/api/local/preview?voice=${v.id}` }));
   }
   if (provider !== "elevenlabs") throw new Error("unknown provider");
   const key = getKey(provider);
@@ -224,14 +223,19 @@ export function cachedSegment(segDir, key) {
 }
 
 // greeting + fixed pause + message, edge silence trimmed, mono 44.1k, loudness -16 LUFS.
-export function joinClips(greetFile, msgFile, out) {
+// Kokoro's raw output has peaks about 20 dB over its average loudness, so lifting it to
+// -16 LUFS made loudnorm's limiter squash every consonant (heard as "not clear"). A gentle
+// speech compressor first brings the peaks in, so the limiter has almost nothing to do.
+export const LOCAL_FX = "acompressor=threshold=-34dB:ratio=4:attack=3:release=60:knee=4,";
+
+export function joinClips(greetFile, msgFile, out, { local = false } = {}) {
   const trim = "silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse";
   const fmt = "aresample=44100,aformat=sample_fmts=fltp:channel_layouts=mono";
   execFileSync("ffmpeg", [
     "-y", "-loglevel", "error",
     "-i", greetFile, "-i", msgFile,
     "-filter_complex",
-    `[0:a]${fmt},${trim}[g];[1:a]${fmt},${trim}[m];anullsrc=r=44100:cl=mono,atrim=0:${PAUSE_S}[p];[g][p][m]concat=n=3:v=0:a=1,loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur=0.15[o]`,
+    `[0:a]${fmt},${trim}[g];[1:a]${fmt},${trim}[m];anullsrc=r=44100:cl=mono,atrim=0:${PAUSE_S}[p];[g][p][m]concat=n=3:v=0:a=1,${local ? LOCAL_FX : ""}loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur=0.15[o]`,
     "-map", "[o]", "-ar", "44100", "-ac", "1", "-b:a", "128k", out,
   ]);
 }
@@ -240,7 +244,7 @@ export const PAUSE_MS = PAUSE_S * 1000;
 
 // One piece of a streamed line, at the same loudness as a finished clip (WAV).
 export function levelClip(file, out) {
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", file, "-af", "aresample=44100,loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "44100", "-ac", "1", "-c:a", "pcm_s16le", out]);
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", file, "-af", `aresample=44100,${LOCAL_FX}loudnorm=I=-16:TP=-1.5:LRA=11`, "-ar", "44100", "-ac", "1", "-c:a", "pcm_s16le", out]);
 }
 
 // Pieces of one recording back to back, as WAV (a streamed line's sentences).

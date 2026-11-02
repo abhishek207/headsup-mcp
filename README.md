@@ -94,7 +94,7 @@ headsup local install   # download the free local voice (full, or: headsup local
 
 ## Local voice
 
-A free voice that runs on your Mac, for people who want project names and Claude's own words without paying for a key. It's off until you download it. On the settings page, under Local voice, play the sample of each model, download the one you like, then pick one of its 12 voices under Voice, "On this Mac". From a terminal: `headsup local install` (full quality) or `headsup local install small`.
+A free voice that runs on your Mac, for people who want project names and Claude's own words without paying for a key. It's off until you download it. On the settings page, under Local voice, play the sample of each model and of each of the 12 voices, download the one you like, then pick one of its 12 voices under Voice, "On this Mac". From a terminal: `headsup local install` (full quality) or `headsup local install small`.
 
 | Model | Sound | Download | On disk | Each new line (M4 MacBook Air) |
 |---|---|---|---|---|

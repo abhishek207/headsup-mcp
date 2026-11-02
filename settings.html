@@ -988,7 +988,7 @@ function renderLocal() {
       controls += `<button class="btn${primary}" data-local-install="${esc(m.id)}"${busy ? " disabled" : ""}>${L.ready ? "Switch to this" : "Download"}</button>`;
     }
     return `<div class="row"><div class="text"><div class="title">${esc(m.label)}${tag}</div><div class="desc">${esc(desc)}</div></div><div class="controls">${controls}</div></div>`;
-  }).join("");
+  }).join("") + (L.ready ? "" : `<div class="row"><div class="text"><div class="title">The ${L.voices} voices</div><div class="desc">American, British and Indian, men and women. Hear each one before you download.</div></div><div class="controls"><button class="btn" data-local-pick>Hear the voices</button></div></div>`);
   $("#localNote").textContent = L.error
     ? "The last download stopped: " + L.error + ". Nothing was changed; try again when you're ready."
     : L.ready
@@ -1036,7 +1036,6 @@ function renderLibrary() {
   document.querySelectorAll("[data-lib]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lib === lib.provider)));
   const list = lib.voices[lib.provider], q = $("#libSearch").value.trim().toLowerCase();
   const added = new Set(S.config.custom_voices.map((v) => v.provider + ":" + v.provider_id));
-  if (lib.provider === "local" && !S.local?.ready) return ($("#libList").innerHTML = '<div class="row"><div class="text"><div class="desc">Download the local voice below to use these voices. It\'s free and runs on your Mac.</div></div></div>');
   if (lib.provider === "elevenlabs" && !S.keys.elevenlabs) return ($("#libList").innerHTML = '<div class="row"><div class="text"><div class="desc">Add your ElevenLabs key below to see the voices in your account.</div></div></div>');
   if (lib.error) return ($("#libList").innerHTML = `<div class="row"><div class="text"><div class="desc">Couldn't load voices: ${esc(lib.error)}</div></div></div>`);
   if (!list) return ($("#libList").innerHTML = '<div class="row"><div class="text"><div class="desc">Loading voices…</div></div></div>');
@@ -1046,11 +1045,11 @@ function renderLibrary() {
       <div class="text"><div class="title">${esc(v.name)}</div><div class="desc">${esc([v.accent, v.gender, v.about].filter(Boolean).join(", ") || PROVIDER[v.provider])}</div></div>
       <div class="controls">
         ${v.preview ? `<button class="icon" data-lib-preview="${esc(v.preview)}" aria-label="Preview ${esc(v.name)} in the browser">${PLAY_SVG}</button>` : ""}
-        ${added.has(v.provider + ":" + v.provider_id) ? '<span class="unit">Added</span>' : `<button class="btn" data-lib-add="${esc(v.provider_id)}">Add</button>`}
+        ${added.has(v.provider + ":" + v.provider_id) ? '<span class="unit">Added</span>' : v.provider === "local" && !S.local?.ready ? '<span class="unit">Download first</span>' : `<button class="btn" data-lib-add="${esc(v.provider_id)}">Add</button>`}
       </div>
     </div>`).join("") : '<div class="row"><div class="text"><div class="desc">No voices match.</div></div></div>')
     + `<div class="row"><div class="text"><div class="desc">${lib.provider === "local"
-      ? "These voices run on your Mac with Kokoro. Previews play here in the browser and cost nothing; each one takes a few seconds the first time. Alpha and Omega are Hindi voices reading English, so hear them before you pick one."
+      ? (S.local?.ready ? "These voices run on your Mac with Kokoro. Previews play here in the browser and cost nothing." : "Hear each voice now; download the local voice below to use them.") + " Alpha and Omega are Hindi voices reading English, so hear them before you pick one."
       : lib.provider === "elevenlabs"
       ? "These are the voices in your ElevenLabs account. To use one from the ElevenLabs Voice Library, add it to My Voices on elevenlabs.io, then reopen this list. Previews play here in the browser and are free."
       : "Sarvam voices speak Indian English. Add one, then press its play button to hear it on your Mac (about 30 characters)."}</div></div></div>`;
@@ -1060,7 +1059,7 @@ async function loadLibrary(provider) {
   lib.provider = provider;
   lib.error = null;
   renderLibrary();
-  if (lib.voices[provider] || (provider === "elevenlabs" && !S.keys.elevenlabs) || (provider === "local" && !S.local?.ready)) return;
+  if (lib.voices[provider] || (provider === "elevenlabs" && !S.keys.elevenlabs)) return;
   try { lib.voices[provider] = (await api("/api/library?provider=" + provider)).voices; }
   catch (e) { lib.error = e.message; }
   renderLibrary();
@@ -1141,9 +1140,11 @@ document.addEventListener("click", (e) => {
   if (b.dataset.lib) { lib.chosen = true; return loadLibrary(b.dataset.lib); }
   if (b.dataset.libPreview) {
     previewAudio?.pause();
-    if (b.dataset.libPreview.startsWith("/api/local/")) toast("Making a sample on your Mac…");
     previewAudio = new Audio(b.dataset.libPreview);
-    previewAudio.play().catch(() => toast("Couldn't play the preview"));
+    // Samples ship with Heads-up or are kept once made; say so only when one is being made.
+    const slow = setTimeout(() => toast("Making a sample on your Mac…"), 800);
+    previewAudio.addEventListener("playing", () => clearTimeout(slow), { once: true });
+    previewAudio.play().catch(() => (clearTimeout(slow), toast("Couldn't play the preview")));
     return;
   }
   if (b.dataset.localSample) {

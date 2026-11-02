@@ -22,7 +22,7 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 | `server.json`, `glama.json` | Official MCP registry entry (`mcp-publisher publish`, after the same version is on npm; the registry checks `mcpName` in package.json) and the Glama listing claim. Not in the npm package. |
 | `tools/install.mjs` | `headsup install` / `npm run setup` / `npx github:abhishek207/headsup-mcp install`: call detector into `DATA/bin`, marketplace add + plugin install (Claude Code, Codex), allow rule, removes pre-plugin setup, `headsup` shim. Idempotent; `--dry-run`, `--uninstall`, `--source`. |
 | `assets/logo.svg` | Logo ("ping"), served as the page's favicon and header mark. |
-| `assets/local-samples/{full,small}.mp3` | The same line (Michael) from each local model, so users can hear the difference before downloading (`/api/local/sample`). Regenerate both together if the models change. |
+| `assets/local-samples/` | `{full,small}.mp3`: the same line (Michael) from each local model, so users can hear the difference before downloading (`/api/local/sample`). `voices/<id>.mp3`: each of the 12 voices from the full model at 1x (`/api/local/preview` serves these until the user has another model or speed; ~380 KB in all). Regenerate together if the models or `LOCAL_FX` change. |
 | `templates.json` | Greeting + the 20 alerts (`id`, `text`, `when`). `when` feeds the MCP tool description. |
 | `voices.json` | The 7 voices: accent, gender, speaker, provider, provider voice id. |
 | `voices/<voice>/<id>.mp3` | 140 built-in clips ("Hello." + 0.6 s + message, −16 LUFS mono). |
@@ -49,6 +49,7 @@ Claude Code / Codex plugin (local macOS MCP server + skill + hooks) that speak s
 - Spending: generating audio costs the user's credits. Dry-run, state the character count, and get a go-ahead before any batch. Project names are capped at 20 new names per day.
 - The settings page runs under a strict CSP: only its inline `<script>` blocks (allowed by hash, computed when served), no inline event handlers (`onclick=`), no external scripts or fonts, `fetch` to itself only. Keep it that way; build UI with `addEventListener`.
 - Anything sent to a TTS provider goes through `cleanMessage()`, which also swaps links, file paths, email addresses and key-like strings for plain words. Don't bypass it.
+- Local voice audio goes through `LOCAL_FX` (a gentle compressor) before loudnorm: Kokoro's peaks sit ~20 dB over its loudness, and loudnorm alone limited them hard enough that the owner heard it as unclear.
 - Keep the page's design language: liquid glass on an indigo/violet/cyan gradient, SF Pro (system font), one accent gradient for "on", amber only for "silent now", sentence case, no all-caps labels.
 - Dark mode is warm charcoal with a violet-to-rose accent: no blue or navy, no glows, no edge lines. Depth comes from shadow and fill only (the owner's call). Colours and depth are CSS variables on `:root` and both dark blocks; change them there, not in component rules.
 

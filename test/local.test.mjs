@@ -217,10 +217,11 @@ test("local voice: Claude can say much more than with a paid voice", () => {
   assert.equal(core.maxChars("american-male", c), 160);
 });
 
-test("local voices are listed for the library, with previews once downloaded", async () => {
+test("local voices are listed for the library, each with a sample shipped in the package", async () => {
   const { providerVoices } = await import("../tts.mjs");
   const list = await providerVoices("local");
   assert.equal(list.length, local.LOCAL_VOICES.length);
-  assert.ok(list.every((v) => v.provider === "local" && v.preview === null), "no previews before the download");
+  assert.ok(list.every((v) => v.provider === "local" && v.preview === `/api/local/preview?voice=${v.provider_id}`));
+  for (const v of local.LOCAL_VOICES) assert.ok(statSync(new URL(`../assets/local-samples/voices/${v.id}.mp3`, import.meta.url)).size > 10_000, `sample for ${v.id}`);
   assert.deepEqual(new Set(list.map((v) => v.accent)), new Set(["American", "British", "Indian"]));
 });

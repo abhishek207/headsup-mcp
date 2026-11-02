@@ -148,7 +148,7 @@ export async function compose(voice, c, o) {
   }
   const [g, m] = [await segment(voice, info, parts[0], o.kind), await segment(voice, info, parts[1], o.kind)];
   mkdirSync(dirname(out), { recursive: true });
-  joinClips(g, m, out);
+  joinClips(g, m, out, { local: info.provider === "local" });
   if (o.msgId === "live") {
     prune(join(SEGMENTS, voice), "live-");
     prune(dirname(out), "live-");
@@ -212,7 +212,7 @@ export async function composeStream(voice, c, o, push) {
     const msgSeg = join(dir, `${msgKey}.wav`);
     concatClips(files.slice(greetHit ? 0 : 1), msgSeg);
     mkdirSync(dirname(out), { recursive: true });
-    joinClips(greetSeg, msgSeg, out);
+    joinClips(greetSeg, msgSeg, out, { local: true });
   } finally {
     rmSync(made, { recursive: true, force: true });
   }
