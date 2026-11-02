@@ -49,8 +49,8 @@ export const MODELS = {
     bytes: 349_886_476,
     file: "model.onnx",
     disk: 420_000_000,
-    memory: 750,
-    seconds: 3,
+    memory: 730,
+    seconds: 4,
   },
   small: {
     id: "small",
@@ -61,8 +61,8 @@ export const MODELS = {
     bytes: 132_353_410,
     file: "model.int8.onnx",
     disk: 210_000_000,
-    memory: 520,
-    seconds: 4,
+    memory: 500,
+    seconds: 7,
   },
 };
 export const DEFAULT_MODEL = "full";

@@ -76,7 +76,9 @@ for (const [name, dir, file] of models) {
 // End to end, through prepare(): what the user waits for before the alert plays.
 const { normalize, prepare } = await import("../core.mjs");
 const c = normalize({ project_names: { enabled: true }, live: { enabled: true }, custom_voices: [{ provider: "local", provider_id: "am_michael" }], voice: "local-am_michael" });
-const runs = [["new project, new line", "bench" + Date.now().toString(36), LINES[1]], ["same project, new line", null, LINES[2]], ["both cached", null, LINES[2]]];
+const tag = Date.now().toString(36); // fresh text each run, so re-runs aren't cache hits
+const fresh = LINES[2].replace("now", `now, run ${tag}`);
+const runs = [["new project, new line", "bench" + tag, LINES[1] + ` Run ${tag}.`], ["same project, new line", null, fresh], ["both cached", null, fresh]];
 console.log("\nAlert, end to end (prepare: greeting + line, joined)");
 for (const [label, project, message] of runs) {
   const p = project ?? runs[0][1];

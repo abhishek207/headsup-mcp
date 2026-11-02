@@ -1,10 +1,11 @@
 // Every test file gets its own empty DATA folder, nothing ever plays, and no provider is called.
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 process.env.HEADS_UP_HOME = mkdtempSync(join(tmpdir(), "heads-up-test-"));
 export const DATA = process.env.HEADS_UP_HOME;
+process.on("exit", () => rmSync(DATA, { recursive: true, force: true }));
 // Never read the real Keychain or environment keys: no test may spend the user's credits.
 process.env.HEADS_UP_NO_KEYCHAIN = "1";
 delete process.env.ELEVENLABS_API_KEY;

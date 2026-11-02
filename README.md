@@ -98,8 +98,8 @@ A free voice that runs on your Mac, for people who want project names and Claude
 
 | Model | Sound | Download | On disk | Each new line (M4 MacBook Air) |
 |---|---|---|---|---|
-| Full quality (recommended) | clear and natural | about 360 MB | about 420 MB | about 3 s and 750 MB of memory |
-| Smaller | a little rough and buzzy | about 140 MB | about 210 MB | about 4 s and 520 MB of memory |
+| Full quality (recommended) | clear and natural | about 360 MB | about 420 MB | about 4 s and 730 MB of memory |
+| Smaller | a little rough and buzzy, about half as fast | about 140 MB | about 210 MB | about 7 s and 500 MB of memory |
 
 - **What it is:** [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), an 82-million-parameter text-to-speech model, run by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). The smaller model is the same one stored in 8-bit numbers, which is where its rougher sound comes from. Heads-up downloads them from their official releases, checks each file against a pinned checksum, and keeps them in the data folder. Nothing is installed anywhere else.
 - **One at a time:** switching downloads the other model (the engine is kept) and replaces the current one, which keeps working until the new one is ready. Lines already recorded in a local voice are made again with the new model.

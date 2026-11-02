@@ -940,7 +940,7 @@ function render() {
 // The local voice: one row per model (full quality, smaller), each with a sample to hear
 // before downloading. Shows download progress, what's installed with what it measured on
 // this Mac, and switching to the other model.
-const LOCAL_SOUND = { full: "Clear and natural.", small: "A little rough and buzzy, a third of the download." };
+const LOCAL_SOUND = { full: "Clear and natural.", small: "A little rough and buzzy, and about half as fast. A third of the download." };
 function renderLocal() {
   const L = S.local, mb = (n) => Math.round(n / 1e6) + " MB";
   if (!L.supported) {
