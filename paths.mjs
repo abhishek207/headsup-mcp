@@ -21,6 +21,13 @@ export function defaultData(platform = process.platform, env = process.env, home
 }
 
 export const DATA = process.env.HEADS_UP_HOME || defaultData();
+
+// Where the Claude desktop app keeps its data (Electron's userData folder for "Claude").
+export function claudeAppData(platform = process.platform, env = process.env, home = homedir()) {
+  if (platform === "darwin") return join(home, "Library", "Application Support", "Claude");
+  if (platform === "win32") return join(env.APPDATA || join(home, "AppData", "Roaming"), "Claude");
+  return join(env.XDG_CONFIG_HOME || join(home, ".config"), "Claude");
+}
 mkdirSync(DATA, { recursive: true, mode: 0o700 }); // private: alert log, Claude's lines, settings
 
 const HELPER_NAME = { darwin: "media-in-use", win32: "headsup-win.exe" }[process.platform] ?? null;
