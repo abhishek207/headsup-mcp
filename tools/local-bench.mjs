@@ -3,6 +3,8 @@
 // factor and peak memory, on 2 and 4 threads. Installs the voice first if it isn't there.
 //   node tools/local-bench.mjs           the pinned int8 model
 //   node tools/local-bench.mjs --full    also the full-precision model (a 350 MB download)
+// Then times a real alert the way Claude makes one: "Hello from <project>." plus a line, first
+// with nothing cached, then with the greeting cached. That part needs ffmpeg.
 // Set HEADS_UP_HOME to a temp folder to keep it apart from your real settings.
 
 import { execFileSync, spawnSync } from "node:child_process";
@@ -71,4 +73,16 @@ for (const [name, dir, file] of models) {
     const per = j.lines.map((l) => `${l.ms}/${l.audio.toFixed(1)}/${(l.ms / 1000 / l.audio).toFixed(2)}`).join("  ");
     console.log(`${name.padEnd(6)} ${String(threads).padEnd(8)} ${String(j.load).padEnd(8)} ${per.padEnd(50)} ${j.rssMB}`);
   }
+}
+
+// End to end, through prepare(): what the user waits for before the alert plays.
+const { normalize, prepare } = await import("../core.mjs");
+const c = normalize({ project_names: { enabled: true }, live: { enabled: true }, custom_voices: [{ provider: "local", provider_id: "am_michael" }], voice: "local-am_michael" });
+const runs = [["new project, new line", "bench" + Date.now().toString(36), LINES[1]], ["same project, new line", null, LINES[2]], ["both cached", null, LINES[2]]];
+console.log("\nAlert, end to end (prepare: greeting + line, joined)");
+for (const [label, project, message] of runs) {
+  const p = project ?? runs[0][1];
+  const t = Date.now();
+  const r = await prepare("local-am_michael", "review", { project: p, message }, c);
+  console.log(`${label.padEnd(24)} ${String(Date.now() - t).padStart(6)} ms  ${r.live ? "spoken live" : `fallback: ${r.note}`}`);
 }
