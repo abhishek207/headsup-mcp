@@ -49,20 +49,20 @@ test("installer: finds where Claude Code installed the plugin", () => {
   assert.equal(pluginPath(join(DATA, "nowhere")), null);
 });
 
-test("installer: the headsup command runs the copy recorded in DATA/root", () => {
+test("installer: the headsup command runs the copy recorded in DATA/root", { skip: process.platform === "win32" && "needs /bin/sh" }, () => {
   const app = join(DATA, "app");
   mkdirSync(app, { recursive: true });
   writeFileSync(join(app, "cli.mjs"), "console.log('ran ' + process.argv.slice(2).join(' '))");
   writeFileSync(join(DATA, "root"), app);
   const file = join(DATA, "headsup");
-  writeFileSync(file, shim(process.execPath, "/nowhere"));
+  writeFileSync(file, shim(process.execPath, "/nowhere", "darwin"));
   chmodSync(file, 0o755);
   const r = spawnSync(file, ["status"], { encoding: "utf8", env: { ...process.env, HEADS_UP_HOME: DATA } });
   assert.equal(r.stdout.trim(), "ran status");
   assert.match(readFileSync(file, "utf8"), /^#!\/bin\/sh/);
 });
 
-test("installer: odd install paths stay plain text in the headsup command", () => {
+test("installer: odd install paths stay plain text in the headsup command", { skip: process.platform === "win32" && "needs /bin/sh" }, () => {
   for (const p of ["/x/a;touch pwned", "/x/$(touch pwned)", "/x/it's here", "/x/`touch pwned`"]) {
     const r = spawnSync("/bin/sh", ["-c", `v=${quote(p)}; printf '%s' "$v"`], { encoding: "utf8", cwd: DATA });
     assert.equal(r.stdout, p);

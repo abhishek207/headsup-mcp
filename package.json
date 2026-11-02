@@ -2,7 +2,7 @@
   "name": "headsup-mcp",
   "version": "1.6.0",
   "mcpName": "io.github.abhishek207/headsup-mcp",
-  "description": "Spoken voice alerts on your Mac when Claude Code or Codex finishes a task or needs you.",
+  "description": "Spoken voice alerts on your Mac, Linux or Windows PC when Claude Code or Codex finishes a task or needs you.",
   "keywords": [
     "mcp",
     "claude-code",
@@ -12,6 +12,8 @@
     "alerts",
     "notifications",
     "macos",
+    "linux",
+    "windows",
     "tts",
     "elevenlabs",
     "kokoro",
@@ -29,7 +31,9 @@
   "type": "module",
   "license": "GPL-3.0-only",
   "os": [
-    "darwin"
+    "darwin",
+    "linux",
+    "win32"
   ],
   "engines": {
     "node": ">=20"
@@ -40,6 +44,7 @@
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "build": "mkdir -p bin && swiftc -O tools/media-in-use.swift -o bin/media-in-use",
+    "build:win": "mcs -langversion:5 -optimize+ -out:bin/headsup-win.exe tools/headsup-win.cs",
     "setup": "node tools/install.mjs",
     "validate": "claude plugin validate .",
     "settings": "node cli.mjs settings",
@@ -64,6 +69,8 @@
     "settings.mjs",
     "speech.mjs",
     "tts.mjs",
+    "tools/headsup-win.cs",
+    "platform/",
     "settings.html",
     "templates.json",
     "voices.json",

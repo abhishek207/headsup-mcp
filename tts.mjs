@@ -1,20 +1,22 @@
 // Text-to-speech for heads-up, shared by tools/generate.mjs and runtime clips
 // (project names, edited wording, library voices, Claude's own lines). Uses the
 // user's own ElevenLabs or Sarvam key: from the environment (ELEVENLABS_API_KEY,
-// SARVAM_API_KEY) or the macOS Keychain. Keys are never written to config files
-// and never returned to the page. The free local voice (local.mjs) needs no key.
+// SARVAM_API_KEY) or the OS key store (macOS Keychain, the Secret Service keyring on
+// Linux, Credential Manager on Windows). Keys are never written to config files and
+// never returned to the page. The free local voice (local.mjs) needs no key.
 // HEADS_UP_FAKE_TTS=1 (tests) returns a short generated tone instead of calling a provider.
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { LOCAL_VOICES, localReady, speakLocal, speakLocalParts } from "./local.mjs";
 import { DATA, ROOT } from "./paths.mjs";
+import { extraPath, secretDelete, secretRead, secretSave, words } from "./platform/index.mjs";
 const STREAM_DIR = join(DATA, "cache", "stream"); // pieces of lines being streamed
 
-// MCP servers and hooks can start with a minimal PATH; make system tools and Homebrew findable.
-process.env.PATH = [...new Set([...(process.env.PATH ?? "").split(":").filter(Boolean), "/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"])].join(":");
+// MCP servers and hooks can start with a minimal PATH; make system tools (and Homebrew) findable.
+process.env.PATH = [...new Set([...(process.env.PATH ?? "").split(delimiter).filter(Boolean), ...extraPath])].join(delimiter);
 
 export const VOICES = JSON.parse(readFileSync(join(ROOT, "voices.json"), "utf8"));
 export const PROVIDERS = ["elevenlabs", "sarvam"]; // the ones that need the user's key
@@ -22,16 +24,16 @@ export const VOICE_PROVIDERS = [...PROVIDERS, "local"];
 const PAUSE_S = 0.6;
 
 const ENV = { elevenlabs: "ELEVENLABS_API_KEY", sarvam: "SARVAM_API_KEY" };
-// Our own Keychain entry first, then the generic names other tools use.
-const KEYCHAIN = { elevenlabs: ["heads-up-elevenlabs", "elevenlabs-api-key"], sarvam: ["heads-up-sarvam", "sarvam-api-key"] };
+// Our own key store entry first, then the generic names other tools use.
+export const KEYCHAIN = { elevenlabs: ["heads-up-elevenlabs", "elevenlabs-api-key"], sarvam: ["heads-up-sarvam", "sarvam-api-key"] };
 
 function keychainRead(service) {
   if (process.env.HEADS_UP_NO_KEYCHAIN === "1") return null; // tests: never touch real keys or credits
-  const r = spawnSync("security", ["find-generic-password", "-a", process.env.USER, "-s", service, "-w"], { encoding: "utf8" });
-  return r.status === 0 ? r.stdout.trim() || null : null;
+  return secretRead(service);
 }
 
 // Where a provider's key comes from ("env" | "keychain" | "shared keychain"), or null.
+// "keychain" means the OS key store on any platform (words.keyStore names it).
 export function keySource(provider) {
   if (process.env[ENV[provider]]) return "env";
   const [own, shared] = KEYCHAIN[provider];
@@ -49,24 +51,19 @@ function getKey(provider) {
   return process.env[ENV[provider]] || KEYCHAIN[provider].map(keychainRead).find(Boolean) || null;
 }
 
-// Save to the Keychain through `security -i` on stdin, so the key never appears in a process list.
-// Everything in that command line is checked first, so nothing can add a second command.
+// Save to the OS key store. The key reaches it on stdin, never in a process list, and the
+// key is checked first, so it can't carry anything but key characters.
 export function saveKey(provider, key) {
   if (!PROVIDERS.includes(provider)) throw new Error("unknown provider");
   if (!/^[A-Za-z0-9_\-.:]{10,200}$/.test(key)) throw new Error("That doesn't look like an API key");
-  if (!/^[\w.@-]+$/.test(process.env.USER ?? "")) throw new Error("Couldn't save to the Keychain: unusual account name");
-  if (process.env.HEADS_UP_NO_KEYCHAIN === "1") throw new Error("The Keychain is off (HEADS_UP_NO_KEYCHAIN=1)");
-  const r = spawnSync("security", ["-i"], {
-    input: `add-generic-password -U -a "${process.env.USER}" -s "${KEYCHAIN[provider][0]}" -l "Heads-up ${provider} API key" -w "${key}"\n`,
-    encoding: "utf8",
-  });
-  if (r.status !== 0 || /error/i.test(r.stderr)) throw new Error("Couldn't save to the Keychain");
+  if (process.env.HEADS_UP_NO_KEYCHAIN === "1") throw new Error(`The ${words.keyStore} is off (HEADS_UP_NO_KEYCHAIN=1)`);
+  secretSave(KEYCHAIN[provider][0], `Heads-up ${provider} API key`, key);
 }
 
 export function deleteKey(provider) {
   if (!PROVIDERS.includes(provider)) throw new Error("unknown provider");
   if (process.env.HEADS_UP_NO_KEYCHAIN === "1") return;
-  spawnSync("security", ["delete-generic-password", "-a", process.env.USER, "-s", KEYCHAIN[provider][0]]);
+  secretDelete(KEYCHAIN[provider][0]);
 }
 
 const EL = "https://api.elevenlabs.io";
@@ -237,7 +234,7 @@ export function joinClips(greetFile, msgFile, out, { local = false } = {}) {
     "-filter_complex",
     `[0:a]${fmt},${trim}[g];[1:a]${fmt},${trim}[m];anullsrc=r=44100:cl=mono,atrim=0:${PAUSE_S}[p];[g][p][m]concat=n=3:v=0:a=1,${local ? LOCAL_FX : ""}loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur=0.15[o]`,
     "-map", "[o]", "-ar", "44100", "-ac", "1", "-b:a", "128k", out,
-  ]);
+  ], { windowsHide: true });
 }
 
 export const PAUSE_MS = PAUSE_S * 1000;
@@ -272,7 +269,7 @@ export async function localParts(voiceId, texts, speed, onPart) {
 
 // Where a built-in track's 0.6s gap starts and ends.
 function gapOf(track) {
-  const { stderr } = spawnSync("ffmpeg", ["-hide_banner", "-i", track, "-af", "silencedetect=noise=-45dB:d=0.5", "-f", "null", "-"], { encoding: "utf8" });
+  const { stderr } = spawnSync("ffmpeg", ["-hide_banner", "-i", track, "-af", "silencedetect=noise=-45dB:d=0.5", "-f", "null", "-"], { encoding: "utf8", windowsHide: true });
   const start = Number(stderr.match(/silence_start: ([0-9.]+)/)?.[1]);
   const end = Number(stderr.match(/silence_end: ([0-9.]+)/)?.[1]);
   if (!end || !(start > 0)) throw new Error(`no gap found in ${track}`);
@@ -281,10 +278,10 @@ function gapOf(track) {
 
 // The message part of a built-in track: everything after its 0.6s gap, as WAV.
 export function extractMessage(track, out) {
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(gapOf(track).end), "-i", track, "-c:a", "pcm_s16le", out]);
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(gapOf(track).end), "-i", track, "-c:a", "pcm_s16le", out], { windowsHide: true });
 }
 
 // The greeting part of a built-in track ("Hello."): everything before its gap, as WAV.
 export function extractGreeting(track, out) {
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", track, "-t", String(gapOf(track).start), "-c:a", "pcm_s16le", out]);
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", track, "-t", String(gapOf(track).start), "-c:a", "pcm_s16le", out], { windowsHide: true });
 }

@@ -1,7 +1,7 @@
 # Built locally (npm run build)
 bin/
 
-# User data never lives here (it's in ~/Library/Application Support/heads-up),
+# User data never lives here (it's in the data folder: see defaultData in paths.mjs),
 # but keep stray copies out of git just in case.
 config.json
 state.json
