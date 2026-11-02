@@ -284,12 +284,14 @@
     background: var(--glass-strong); border: 1px solid var(--glass-line);
     box-shadow: inset 0 1px 0 var(--glass-edge);
   }
-  .btn:hover { border-color: var(--hover-edge); }
+  .btn:hover:not(:disabled) { border-color: var(--hover-edge); }
+  .btn:disabled { cursor: default; }
+  .btn:disabled:not([aria-busy]) { opacity: .4; }
   .btn.primary {
     background: var(--accent); border-color: transparent; color: var(--on-accent);
     box-shadow: var(--btn-depth);
   }
-  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.primary:hover:not(:disabled) { filter: brightness(1.06); }
   .btn svg { width: 12px; height: 12px; }
 
   .icon {
@@ -957,7 +959,7 @@ function renderLocal() {
     let desc, controls = `<button type="button" class="icon" data-local-sample="${esc(m.sample)}" aria-label="Hear a sample of the ${esc(m.label.toLowerCase())} model">${PLAY_SVG}</button>`;
     if (downloading) {
       desc = busy.step === "engine" || busy.step === "model" ? `${step}, ${pct}% of ${mb(busy.total)}` : step;
-      controls += '<button class="btn" disabled>Downloading…</button>';
+      controls += '<button class="btn" disabled aria-busy="true">Downloading…</button>';
     } else if (here) {
       const use = L.measured
         ? `On this Mac a new line takes ${L.measured.seconds} s and ${L.measured.memory} MB of memory, freed right after.`
