@@ -5,10 +5,12 @@
 // local voice or the user's ElevenLabs or Sarvam key. Guardrails and settings live in core.mjs and
 // config.json; run `headsup` for the settings page.
 
-import { statSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
-import { ROOT, STATUSES, TEMPLATES, alert, allPlayed, detectorProblems, loadConfig, maxChars, projectFor, textFor } from "./core.mjs";
+import { fileURLToPath } from "node:url";
+import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, maxChars, projectFor, textFor } from "./core.mjs";
 import { voiceInfo } from "./speech.mjs";
 
 const config = loadConfig();
@@ -84,14 +86,60 @@ const workDir = (folder) => {
   }
 };
 
+// Each alert runs in a detached worker (this file with --alert) that records and plays it
+// on its own, so it finishes even when the session ends right after the call: Claude Code
+// kills its MCP servers within half a second of exiting. The worker reports two lines on
+// stdout: alert()'s answer at once, then what will be spoken once it's recorded.
+function runAlert(status, opts) {
+  const p = spawn(process.execPath, [fileURLToPath(import.meta.url), "--alert"], { detached: true, stdio: ["pipe", "pipe", "ignore"], env: process.env });
+  p.unref();
+  p.stdin.end(JSON.stringify({ status, opts }));
+  const lines = [];
+  const waiting = [];
+  let buf = "";
+  const take = () => new Promise((ok) => (lines.length ? ok(lines.shift()) : waiting.push(ok)));
+  const give = (x) => (waiting.length ? waiting.shift()(x) : lines.push(x));
+  p.stdout.on("data", (d) => {
+    buf += d;
+    for (let nl; (nl = buf.indexOf("\n")) >= 0; buf = buf.slice(nl + 1)) {
+      try {
+        give(JSON.parse(buf.slice(0, nl)));
+      } catch {
+        // not ours
+      }
+    }
+  });
+  p.on("close", () => {
+    while (waiting.length) give(null);
+  });
+  p.on("error", (e) => give({ ok: false, error: `couldn't start the alert: ${e.message}` }));
+  return { first: take(), prepared: take() };
+}
+
+// The worker: one alert, then exit when it has played.
+async function worker() {
+  process.stdout.on("error", () => {}); // the session may be gone by now; keep playing
+  const say = (o) => process.stdout.write(JSON.stringify(o) + "\n");
+  const { status, opts } = JSON.parse(readFileSync(0, "utf8"));
+  const r = alert(status, opts);
+  say({ ok: r.ok, played: r.played, reason: r.reason, error: r.error, line: r.line });
+  if (r.prepared) {
+    const { live, line, note } = await r.prepared;
+    say({ live, line, note });
+  }
+  if (r.done) await r.done;
+  process.exit(0);
+}
+
 async function callTool(args = {}) {
   const message = typeof args.message === "string" && args.message.trim() ? args.message : null;
-  const r = alert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(workDir(args.folder)), message });
+  const w = runAlert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(workDir(args.folder)), message });
+  const r = (await w.first) ?? { ok: false, error: "the alert stopped before it started" };
   if (!r.ok) return { isError: true, content: [{ type: "text", text: r.error }] };
   if (!r.played) return { content: [{ type: "text", text: `Not played: ${r.reason}. This is the user's setting; don't retry.` }] };
   if (!message) return { content: [{ type: "text", text: `Playing "${r.line}"` }] };
   // Wait for the recording so the answer says what was actually spoken.
-  const p = await Promise.race([r.prepared, new Promise((ok) => setTimeout(() => ok(null), PREPARE_WAIT_MS).unref())]);
+  const p = await Promise.race([w.prepared, new Promise((ok) => setTimeout(() => ok(null), PREPARE_WAIT_MS).unref())]);
   if (!p) return { content: [{ type: "text", text: `Recording "${r.line}"; it plays when ready.` }] };
   const text = p.live ? `Playing "${p.line}"` : `Playing "${p.line}" (your message wasn't spoken: ${p.note ?? "it couldn't be recorded"}; don't retry)`;
   return { content: [{ type: "text", text }] };
@@ -123,7 +171,8 @@ for (const p of detectorProblems()) process.stderr.write(`heads-up: ${p}\n`);
 const send = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
 
 // Replies go out as each call finishes, so a live line being recorded doesn't hold up a ping.
-createInterface({ input: process.stdin }).on("line", async (line) => {
+if (process.argv[2] === "--alert") await worker();
+else createInterface({ input: process.stdin }).on("line", async (line) => {
   if (!line.trim()) return;
   let msg;
   try {
@@ -139,15 +188,3 @@ createInterface({ input: process.stdin }).on("line", async (line) => {
   }
 });
 
-// When the session ends (its input closes, or it's told to stop), finish the alert that's
-// being made or played, up to two minutes, instead of cutting it off mid-sentence.
-let closing = false;
-function finish() {
-  if (closing) return;
-  closing = true;
-  const limit = setTimeout(() => process.exit(0), 120_000);
-  allPlayed().finally(() => (clearTimeout(limit), process.exit(0)));
-}
-process.stdin.on("end", finish);
-process.on("SIGTERM", finish);
-process.on("SIGINT", finish);

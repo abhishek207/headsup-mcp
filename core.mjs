@@ -691,6 +691,3 @@ export function alert(status, { repeat = 1, volume, force = false, source = "cla
   const line = `${greet} ${said && (c.live.enabled || force) ? said : textFor(status, c)}`;
   return { ok: true, played: true, line, prepared, done: queue };
 }
-
-// Resolves when every alert this process started has finished playing.
-export const allPlayed = () => queue;
