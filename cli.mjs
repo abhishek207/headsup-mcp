@@ -3,6 +3,7 @@
 //   headsup              open the settings page
 //   headsup on | off     master switch
 //   headsup mute [min]   mute for N minutes (default 60); unmute to undo
+//   headsup stop         stop the alert that's speaking (and any waiting behind it)
 //   headsup status       show what would happen right now
 //   headsup test [id]    play an alert now, ignoring guardrails
 //   headsup say <words>  speak your own line now with your key or the local voice (like Claude's messages)
@@ -15,7 +16,7 @@
 import { spawn, execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ROOT, STATUSES, activeFocus, alert, blockedReason, currentLocation, detectorProblems, loadConfig, probeDetectors, saveConfig } from "./core.mjs";
+import { ROOT, STATUSES, activeFocus, alert, blockedReason, currentLocation, detectorProblems, loadConfig, probeDetectors, saveConfig, stopPlaying } from "./core.mjs";
 import { usageSummary } from "./speech.mjs";
 import { PROVIDERS, elevenUsage, keySource } from "./tts.mjs";
 
@@ -58,6 +59,9 @@ switch (cmd) {
   case "unmute":
     saveConfig({ ...c, muted_until: null });
     console.log("Unmuted.");
+    break;
+  case "stop":
+    console.log(stopPlaying().stopped ? "Stopped." : "Nothing is playing.");
     break;
   case "status": {
     const here = currentLocation(c);

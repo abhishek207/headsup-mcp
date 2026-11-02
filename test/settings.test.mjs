@@ -131,3 +131,9 @@ test("settings API: the local voice unlocks project names and Claude's lines, an
   assert.equal(saved.config.project_names.enabled, false, "no key and no local voice: off again");
   assert.equal(saved.config.live.enabled, false);
 });
+
+test("settings API: Stop answers whether anything was playing, and cross-site Stop is refused", async () => {
+  assert.deepEqual(JSON.parse((await http("GET", "/api/playing")).body), { playing: false });
+  assert.deepEqual(JSON.parse((await post("/api/stop", {})).body), { stopped: false });
+  assert.equal((await post("/api/stop", {}, { origin: "https://evil.example" })).status, 403);
+});

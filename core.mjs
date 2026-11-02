@@ -3,7 +3,7 @@
 // config.json and state.json are re-read on every call, so edits apply at once
 // to every running Claude session.
 
-import { execFile, execFileSync } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -445,11 +445,85 @@ export async function withPlayLock(fn, { waitMs = 180_000 } = {}) { // long enou
   }
 }
 
+// Stopping: `headsup stop`, the page's Stop button, or the mic opening mid-alert. The
+// player in whichever process holds the lock gets SIGUSR2, kills afplay and restores the
+// volume; alerts that were already waiting when Stop was pressed are dropped too.
+const STOP = join(DATA, "stop.json");
+let stopCurrent = null;
+let listening = false;
+
+export function stopPlaying() {
+  writeJson(STOP, { t: Date.now() });
+  const held = readJson(PLAY_LOCK, null);
+  if (!held?.pid || !alive(held.pid) || !isNode(held.pid)) return { stopped: false };
+  if (held.pid === process.pid) stopCurrent?.("you pressed Stop");
+  else {
+    try {
+      process.kill(held.pid, "SIGUSR2");
+    } catch {
+      return { stopped: false };
+    }
+  }
+  return { stopped: true };
+}
+
+// A crashed alert can leave a lock whose pid now belongs to something else: only signal node.
+const isNode = (pid) => {
+  try {
+    return /node/i.test(execFileSync("ps", ["-o", "comm=", "-p", String(pid)], { encoding: "utf8" }));
+  } catch {
+    return false;
+  }
+};
+
+// Whether an alert is speaking right now (in any session).
+export function isPlaying() {
+  const held = readJson(PLAY_LOCK, null);
+  return Boolean(held?.pid && alive(held.pid));
+}
+
+const stoppedSince = (t) => (readJson(STOP, null)?.t ?? 0) >= t;
+
+// The mic or camera opening while an alert speaks (dictation, a call): stop at once.
+function watchCalls(c, stop) {
+  if (!(c.calls.mic || c.calls.camera)) return () => {};
+  let busy = false;
+  const timer = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const m = JSON.parse((await run(MEDIA_HELPER, [], { timeout: 2000 })).stdout);
+      if (c.calls.camera && m.camera) stop("the camera came on");
+      else if (c.calls.mic && m.mic) stop("the microphone came on");
+    } catch {
+      // detector unavailable: the start-of-alert check already reported it
+    } finally {
+      busy = false;
+    }
+  }, 700);
+  return () => clearInterval(timer);
+}
+
 // items: clip paths and pauses (ms), played in order; an async iterable when a long
-// line is still being made.
-const play = (items, c, requested) =>
+// line is still being made. Resolves to null, or to why it was stopped.
+const play = (items, c, requested, { since = Date.now(), force = false } = {}) =>
   withPlayLock(async (remember) => {
+    if (stoppedSince(since)) return "you pressed Stop";
     let before = null;
+    let child = null;
+    let why = null;
+    let wake = null;
+    const stop = (reason) => {
+      why ??= reason;
+      child?.kill("SIGTERM");
+      wake?.();
+    };
+    stopCurrent = stop;
+    if (!listening) {
+      listening = true;
+      process.on("SIGUSR2", () => stopCurrent?.("you pressed Stop"));
+    }
+    const unwatch = force ? () => {} : watchCalls(c, stop);
     try {
       if (c.volume.auto || requested !== undefined) {
         const current = await getVolume();
@@ -461,11 +535,25 @@ const play = (items, c, requested) =>
           await setVolume(vol, false);
         }
       }
-      for await (const item of items) {
-        if (typeof item === "number") await sleep(item);
-        else await run("afplay", [item]);
+      // Stop must not wait for the next sentence of a long line to be made.
+      const it = items[Symbol.asyncIterator]();
+      const halted = new Promise((ok) => (wake = ok));
+      while (!why) {
+        const next = await Promise.race([it.next(), halted]);
+        if (why || !next || next.done) break;
+        const item = next.value;
+        if (typeof item === "number") await Promise.race([sleep(item), halted]);
+        else {
+          child = spawn("afplay", [item], { stdio: "ignore" });
+          await new Promise((ok) => (child.on("exit", ok), child.on("error", ok)));
+          child = null;
+        }
       }
+      if (why) it.return?.().catch(() => {});
+      return why;
     } finally {
+      unwatch();
+      stopCurrent = null;
       if (before) await setVolume(before.vol, before.muted).catch(() => {});
     }
   });
@@ -681,10 +769,12 @@ export function alert(status, { repeat = 1, volume, force = false, source = "cla
     live: false,
     note: e.message,
   }));
+  const since = Date.now();
   queue = queue
     .then(async () => {
       const p = await prepared;
-      await play(sequence(p, times, c.chime && existsSync(CHIME)), c, vol);
+      const stopped = await play(sequence(p, times, c.chime && existsSync(CHIME)), c, vol, { since, force });
+      if (stopped) record({ status, source, ...(project && { project }), result: "stopped", reason: stopped });
     })
     .catch((e) => process.stderr.write(`heads-up: ${e.message}\n`));
   const greet = namesProject(project, c) ? projectGreeting(project, c) : greeting;

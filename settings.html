@@ -253,8 +253,8 @@
   .recent .what { display: flex; align-items: center; gap: 8px; font-weight: 500; flex-wrap: wrap; }
   .recent .what::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
   .recent .sub { color: var(--ink-3); font-weight: 400; }
-  .recent .skipped .what { color: var(--ink-2); font-weight: 400; }
-  .recent .skipped .what::before { background: var(--ink-3); }
+  .recent :is(.skipped, .stopped) .what { color: var(--ink-2); font-weight: 400; }
+  .recent :is(.skipped, .stopped) .what::before { background: var(--ink-3); }
   .recent .why { grid-column: 2; color: var(--ink-3); margin-top: -2px; }
   .empty { color: var(--ink-3); font-size: 13px; margin: 0; }
   .credits { margin: 8px 0 24px; color: var(--ink-3); font-size: 12px; }
@@ -764,11 +764,35 @@ async function play(id, voice) {
     const p = infoOf(v)?.provider;
     if (S.recordCost[v] && canRecord(p)) toast(p === "local" ? "Making it on your Mac…" : "Recording with your key…");
     const r = await api("/api/test", voice ? { status: id, voice } : { status: id });
+    pollPlaying();
     await loadWave(voice ?? S.config.voice, id).catch(() => {});
     sweep();
     if (r.note) toast("Played the built-in line: " + r.note);
     setTimeout(refresh, 800);
   } catch (e) { toast("Couldn't play: " + e.message); }
+}
+
+// While an alert speaks (from any session), Play test turns into Stop.
+const PLAY_ICON = '<svg viewBox="0 0 10 12" aria-hidden="true"><path d="M0 0l10 6-10 6z" fill="currentColor"/></svg>';
+const STOP_ICON = '<svg viewBox="0 0 12 12" aria-hidden="true"><rect width="12" height="12" rx="2" fill="currentColor"/></svg>';
+function showPlaying(on) {
+  S.playing = on;
+  const b = $("#testBtn");
+  b.innerHTML = (on ? STOP_ICON : PLAY_ICON) + (on ? "Stop" : "Play test");
+  b.setAttribute("aria-label", on ? "Stop the alert that's speaking" : "Play a test alert");
+}
+async function stopNow() {
+  try {
+    await api("/api/stop", {});
+    showPlaying(false);
+    setTimeout(refresh, 400);
+  } catch (e) { toast("Couldn't stop: " + e.message); }
+}
+async function pollPlaying() {
+  try {
+    const r = await api("/api/playing");
+    if (r.playing !== S.playing) showPlaying(r.playing);
+  } catch {}
 }
 
 function stateView() {
@@ -796,6 +820,7 @@ function render() {
   $("#stateTitle").textContent = title;
   $("#stateText").textContent = text;
   $("#powerBtn").textContent = c.enabled ? "Turn off" : "Turn on";
+  showPlaying(Boolean(S.playing));
   const muted = c.muted_until && new Date(c.muted_until) > new Date();
   $("#muteText").textContent = muted ? "Until " + clock(c.muted_until) : "Not muted";
   $("#unmuteBtn").disabled = !muted;
@@ -810,7 +835,7 @@ function render() {
   $("#history").innerHTML = S.history.length
     ? S.history.map((h) => {
         const sub = [h.project, origin(h)].filter(Boolean).join(", ");
-        return `<li class="${h.result}"><time>${clock(h.t)}</time><span class="what">${esc(label(h.status))}${sub ? ` <span class="sub">${esc(sub)}</span>` : ""}</span>${h.message ? `<span class="why">“${esc(h.message)}”</span>` : ""}${h.reason ? `<span class="why">Skipped: ${esc(h.reason)}</span>` : ""}</li>`;
+        return `<li class="${h.result}"><time>${clock(h.t)}</time><span class="what">${esc(label(h.status))}${sub ? ` <span class="sub">${esc(sub)}</span>` : ""}</span>${h.message ? `<span class="why">“${esc(h.message)}”</span>` : ""}${h.reason ? `<span class="why">${h.result === "stopped" ? "Stopped" : "Skipped"}: ${esc(h.reason)}</span>` : ""}</li>`;
       }).join("")
     : '<p class="empty">Nothing yet. Alerts appear here as Claude sends them.</p>';
 
@@ -1120,7 +1145,7 @@ document.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   if (b.dataset.themeSet) return setTheme(b.dataset.themeSet);
-  if (b.id === "testBtn") return play(wave.id);
+  if (b.id === "testBtn") return S.playing ? stopNow() : play(wave.id);
   if (b.id === "powerBtn") { S.config.enabled = !S.config.enabled; return save(true); }
   if (b.dataset.mute !== undefined) {
     const m = Number(b.dataset.mute);
@@ -1255,6 +1280,7 @@ async function refresh() {
 }
 refresh();
 setInterval(() => { if (!document.hidden && !document.activeElement?.matches("input")) refresh(); }, 15000);
+setInterval(() => { if (!document.hidden && S) pollPlaying(); }, 1500);
 </script>
 </body>
 </html>

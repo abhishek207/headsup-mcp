@@ -19,7 +19,8 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 - **Automatic alerts** via Claude Code hooks: permission prompts, and turns that run longer than 2 minutes, even if Claude forgets to call the tool. Background sessions (`claude -p`, SDK workers) never trigger them.
 - **Polite by default**
   - Away detection (off by default): silent if you used the keyboard or mouse in the last 60 seconds. It's off because with several sessions open you're usually typing in another one when this one needs you; switch it on in settings.
-  - Calls and Focus: silent while a microphone is in use, or a macOS Focus is on.
+  - Calls and Focus: silent while a microphone is in use, or a macOS Focus is on. If the mic or camera comes on while an alert is speaking (dictation, a call), it stops at once.
+  - Stop: `headsup stop`, or the Stop button on the settings page, ends the alert mid-sentence (and drops any waiting behind it). Bind `headsup stop` to a key with a macOS Shortcut if you want one keypress.
   - Locations: optionally only play on saved networks (Home, office), recognised by the router's hardware address. No GPS.
   - Quiet hours, a gap between alerts, and an hourly limit.
 - **Ear-safe volume**: if your Mac is muted or quiet, an alert briefly turns it up, then restores it. AirPods and headphones never go above 50%; speakers never above 90%.
@@ -85,6 +86,7 @@ That gives the client the `notify_user` tool. The skill and hooks only come with
 headsup              # open the settings page
 headsup status       # what would happen right now
 headsup test review  # play an alert now
+headsup stop         # stop the alert that's speaking
 headsup mute 30      # mute for 30 minutes; headsup unmute
 headsup off          # master switch; headsup on
 headsup say "The build is green."   # hear a line of your own (local voice or your key)

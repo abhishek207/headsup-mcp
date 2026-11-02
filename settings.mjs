@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import { GREETING, HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, textFor } from "./core.mjs";
+import { GREETING, HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isPlaying, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, stopPlaying, textFor } from "./core.mjs";
 import { LOCAL_DIR, LOCAL_VOICES, MODELS, installLocal, installedModel, isModel, localReady, localStatus, removeLocal } from "./local.mjs";
 import { composed, usageSummary, voiceInfo } from "./speech.mjs";
 import { PROVIDERS, cachedSegment, checkKey, deleteKey, elevenUsage, keySource, providerVoices, saveKey, segKey, synth } from "./tts.mjs";
@@ -49,6 +49,7 @@ async function state() {
     // Cooldown is pacing between alerts, not a reason the page should look "silent".
     blocked: reason && !reason.startsWith("cooldown") ? reason : null,
     history: loadHistory().slice(0, 25),
+    playing: isPlaying(),
     volume,
     device,
     idle: idleSeconds(),
@@ -193,6 +194,8 @@ const server = createServer(async (req, res) => {
       saveConfig(withKeyGate(await readBody(req)));
       return json(200, await state());
     }
+    if (req.method === "GET" && url.pathname === "/api/playing") return json(200, { playing: isPlaying() });
+    if (req.method === "POST" && url.pathname === "/api/stop") return json(200, stopPlaying());
     if (req.method === "POST" && url.pathname === "/api/test") {
       const { status, voice, project, message } = await readBody(req);
       const r = alert(status, {
