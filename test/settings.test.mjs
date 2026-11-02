@@ -96,6 +96,15 @@ test("settings API: the local voice unlocks project names and Claude's lines, an
   const before = JSON.parse((await http("GET", "/api/local")).body).local;
   assert.equal(before.ready, false);
   assert.equal(before.installing, null);
+  assert.deepEqual(before.models.map((m) => m.id), ["full", "small"]);
+  // Each model's sample plays before anything is downloaded; only the two known ids.
+  for (const m of before.models) {
+    const r = await http("GET", m.sample);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers["content-type"], "audio/mpeg");
+  }
+  for (const bad of ["__proto__", "constructor", "../settings", ""]) assert.equal((await http("GET", `/api/local/sample?model=${encodeURIComponent(bad)}`)).status, 404, bad);
+  for (const bad of ["constructor", "toString", "huge", 1]) assert.equal((await post("/api/local/install", { model: bad })).status, 400, String(bad));
   // A downloaded voice, as far as the server can tell (nothing here speaks).
   const dir = join(DATA, "local");
   mkdirSync(join(dir, "engine"), { recursive: true });
@@ -105,6 +114,7 @@ test("settings API: the local voice unlocks project names and Claude's lines, an
   writeFileSync(join(dir, "installed.json"), JSON.stringify({ engine: PINNED.engine, model: PINNED.model }));
   const state = JSON.parse((await http("GET", "/api/state")).body);
   assert.equal(state.local.ready, true);
+  assert.equal(state.local.model, "full");
   let saved = JSON.parse((await post("/api/config", { ...state.config, project_names: { enabled: true }, live: { enabled: true } })).body);
   assert.equal(saved.config.project_names.enabled, true);
   assert.equal(saved.config.live.enabled, true);

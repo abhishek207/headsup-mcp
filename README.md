@@ -10,7 +10,7 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 
 - **20 alerts** in **7 voices** (American, British, Australian and Indian; male and female), 140 built-in clips. No API key needed for these.
 - **Works without a key**: out of the box it plays the built-in clips ("Hello. I need your review."). Project names and Claude's own words are opt-in features that switch on once you download the local voice or add your own ElevenLabs or Sarvam key.
-- **Local voice** (free, optional): a 360 MB download that speaks on your Mac with no key and no account. 12 voices (American, British and Indian English), no daily limit. See [Local voice](#local-voice).
+- **Local voice** (free, optional): a voice model that speaks on your Mac with no key and no account, in two sizes you can hear before downloading. 12 voices (American, British and Indian English), no daily limit. See [Local voice](#local-voice).
 - **Project names** (local voice or your key): "Hello from Brand Bakery Hub." Each project's name is recorded once, then cached.
 - **Claude's own words** (local voice or your key): when a fixed line doesn't say enough, Claude adds a short `message` ("The migration ran, but two tables need your review.") and it's spoken live. Lines are cleaned (no code or links), capped in length and cached. With a key they also count against a daily character budget. If it can't be recorded, the regular alert plays.
 - **Any voice from your provider** (your key): add voices from your ElevenLabs account or any of Sarvam's 37 speakers on the settings page. Alerts in that voice are recorded the first time each plays, or all at once.
@@ -30,7 +30,7 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 - macOS, Node.js 20+, Claude Code (or Codex)
 - Xcode Command Line Tools (`swiftc`) to build the microphone checker
 - `ffmpeg` (Homebrew) for anything recorded, with the local voice or your key
-- Optional: the local voice (about 420 MB of disk), or an ElevenLabs and/or Sarvam API key, only for recording new lines
+- Optional: the local voice (about 420 MB of disk, or 210 MB for the smaller model), or an ElevenLabs and/or Sarvam API key, only for recording new lines
 
 ## Install
 
@@ -89,15 +89,21 @@ headsup mute 30      # mute for 30 minutes; headsup unmute
 headsup off          # master switch; headsup on
 headsup say "The build is green."   # hear a line of your own (local voice or your key)
 headsup usage        # characters sent to your voice providers
-headsup local install   # download the free local voice; headsup local remove
+headsup local install   # download the free local voice (full, or: headsup local install small); headsup local remove
 ```
 
 ## Local voice
 
-A free voice that runs on your Mac, for people who want project names and Claude's own words without paying for a key. It's off until you download it: click Download on the settings page (or run `headsup local install`), then pick one of its 12 voices under Voice, "On this Mac".
+A free voice that runs on your Mac, for people who want project names and Claude's own words without paying for a key. It's off until you download it. On the settings page, under Local voice, play the sample of each model, download the one you like, then pick one of its 12 voices under Voice, "On this Mac". From a terminal: `headsup local install` (full quality) or `headsup local install small`.
 
-- **What it is:** [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), an 82-million-parameter text-to-speech model, run by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Heads-up downloads both from their official releases (about 360 MB), checks each file against a pinned checksum, and keeps about 420 MB in the data folder. Nothing is installed anywhere else.
-- **What it costs:** nothing per line. There's no daily budget and no limit on new project names. It uses your CPU for a moment each time it records a new line: on an M4 MacBook Air, 2 to 3 seconds and about 750 MB of memory, freed as soon as the line is made. Nothing stays loaded between alerts, and lines already made are cached and play instantly.
+| Model | Sound | Download | On disk | Each new line (M4 MacBook Air) |
+|---|---|---|---|---|
+| Full quality (recommended) | clear and natural | about 360 MB | about 420 MB | about 3 s and 750 MB of memory |
+| Smaller | a little rough and buzzy | about 140 MB | about 210 MB | about 4 s and 520 MB of memory |
+
+- **What it is:** [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), an 82-million-parameter text-to-speech model, run by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). The smaller model is the same one stored in 8-bit numbers, which is where its rougher sound comes from. Heads-up downloads them from their official releases, checks each file against a pinned checksum, and keeps them in the data folder. Nothing is installed anywhere else.
+- **One at a time:** switching downloads the other model (the engine is kept) and replaces the current one, which keeps working until the new one is ready. Lines already recorded in a local voice are made again with the new model.
+- **What it costs:** nothing per line. There's no daily budget and no limit on new project names. It uses your CPU and memory for a few seconds each time it records a new line, then frees them; after the download the settings page shows what that took on your Mac. Nothing stays loaded between alerts, and lines already made are cached and play instantly.
 - **Voices:** 6 American, 4 British, 2 Indian (a Hindi voice reading English). For a native Indian English voice use Sarvam with your key.
 - **Keys still work:** the local voice is one more choice next to ElevenLabs and Sarvam. If you'd rather not run a model on your Mac, skip it and use a key.
 - `headsup local remove` deletes it. If you have no key, project names and Claude's own words switch off again.

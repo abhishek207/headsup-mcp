@@ -7,7 +7,7 @@
 //   headsup test [id]    play an alert now, ignoring guardrails
 //   headsup say <words>  speak your own line now with your key or the local voice (like Claude's messages)
 //   headsup usage        characters sent to your voice providers
-//   headsup local [install | remove]   the free local voice: status, download it, or delete it
+//   headsup local [install [full | small] | remove]   the free local voice: status, download or switch model, delete
 //   headsup version      version and maker
 //   headsup install      install the plugin in Claude Code (and Codex); uninstall to undo
 //   headsup serve        run the MCP server on stdio (what `npx headsup-mcp serve` starts for other MCP clients)
@@ -70,7 +70,7 @@ switch (cmd) {
     console.log(`Live:     ${c.live.enabled ? `on, up to ${c.live.max_chars} characters a line, ${c.live.daily_chars} a day` : "off"}`);
     console.log(`Keys:     ElevenLabs ${keySource("elevenlabs") ?? "none"}, Sarvam ${keySource("sarvam") ?? "none"}`);
     const local = (await import("./local.mjs")).localStatus();
-    console.log(`Local:    ${local.ready ? `ready, ${local.voices} voices` : local.supported ? "not downloaded (headsup local install)" : "not available here"}`);
+    console.log(`Local:    ${local.ready ? `ready (${local.model}), ${local.voices} voices` : local.supported ? "not downloaded (headsup local install)" : "not available here"}`);
     console.log(`Location: ${here.location ?? "unsaved network"}${c.location_lock ? " (location lock on)" : ""}`);
     const probe = probeDetectors();
     const m = probe.media;
@@ -111,17 +111,24 @@ switch (cmd) {
     break;
   }
   case "local": {
-    const { installLocal, localStatus, removeLocal } = await import("./local.mjs");
+    const { DEFAULT_MODEL, MODELS, installLocal, isModel, localStatus, removeLocal } = await import("./local.mjs");
+    const mb = (n) => `${Math.round(n / 1e6)} MB`;
     if (arg === "install") {
+      const model = process.argv[4] ?? DEFAULT_MODEL;
+      if (!isModel(model)) {
+        console.error(`Pick ${Object.keys(MODELS).join(" or ")}: headsup local install ${DEFAULT_MODEL}`);
+        process.exit(1);
+      }
       let shown = "";
       const show = (p) => {
         const line = { unpacking: "Unpacking…", checking: "Checking that it speaks…" }[p.step] ?? `Downloading the ${p.step}: ${Math.floor((100 * p.done) / p.total)}%`;
         if (line !== shown) process.stderr.write(`\r${(shown = line).padEnd(40)}`);
       };
       try {
-        await installLocal({ onProgress: show });
+        const s = await installLocal({ model, onProgress: show });
         process.stderr.write("\n");
-        console.log("The local voice is ready. Pick one of its voices on the settings page: run headsup.");
+        const m = s.measured ? ` On this Mac a new line took ${s.measured.seconds} s and ${s.measured.memory} MB of memory.` : "";
+        console.log(`The local voice (${MODELS[model].label.toLowerCase()}) is ready.${m} Pick one of its voices on the settings page: run headsup.`);
       } catch (e) {
         process.stderr.write("\n");
         console.error(`The local voice wasn't installed: ${e.message}`);
@@ -134,8 +141,15 @@ switch (cmd) {
       console.log("The local voice is removed.");
     } else {
       const s = localStatus();
-      const mb = (n) => `${Math.round(n / 1e6)} MB`;
-      console.log(s.ready ? `Ready: ${s.voices} voices, about ${mb(s.disk)} on disk. Remove it with: headsup local remove` : s.supported ? `Not downloaded. Get it with: headsup local install (${mb(s.download)}, about ${mb(s.disk)} on disk)` : "Not available on this computer.");
+      const line = (m) => `  ${m.id.padEnd(6)} ${m.label}: ${mb(m.download)} download, about ${mb(m.disk)} on disk, about ${m.memory} MB of memory for ${m.seconds} s per new line`;
+      if (!s.supported) console.log("Not available on this computer.");
+      else if (s.ready) {
+        const m = MODELS[s.model];
+        const here = s.measured ? ` On this Mac a new line takes ${s.measured.seconds} s and ${s.measured.memory} MB of memory.` : "";
+        console.log(`Ready: ${m.label.toLowerCase()}, ${s.voices} voices, about ${mb(m.disk)} on disk.${here}`);
+        const other = s.models.find((x) => x.id !== s.model);
+        console.log(`Switch with: headsup local install ${other.id}. Remove with: headsup local remove`);
+      } else console.log(`Not downloaded. Get one with: headsup local install full (or small)\n${s.models.map(line).join("\n")}`);
     }
     break;
   }
@@ -155,6 +169,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert] | say <words> | usage | local [install | remove] | install | uninstall | version]");
+    console.log("Usage: headsup [settings | on | off | mute [minutes] | unmute | status | test [alert] | say <words> | usage | local [install [full | small] | remove] | install | uninstall | version]");
     console.log(`Alerts: ${Object.keys(STATUSES).join(", ")}`);
 }

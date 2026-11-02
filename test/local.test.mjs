@@ -2,7 +2,7 @@ import { DATA, optedIn, quiet } from "./helpers.mjs";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -32,10 +32,13 @@ before(async () => {
   mkdirSync(join(FIX, "e", "package"), { recursive: true });
   writeFileSync(join(FIX, "e", "package", "sherpa-onnx.node"), "not really an addon");
   execFileSync("tar", ["-czf", join(FIX, "engine.tgz"), "-C", join(FIX, "e"), "package"]);
-  const m = join(FIX, "m", "kokoro-test");
-  mkdirSync(join(m, "dict"), { recursive: true });
-  for (const f of [local.PINNED.file, "voices.bin", "tokens.txt", "lexicon-us-en.txt", "lexicon-zh.txt", "dict/jieba.dict"]) writeFileSync(join(m, f), f);
-  execFileSync("tar", ["-cjf", join(FIX, "model.tar.bz2"), "-C", join(FIX, "m"), "kokoro-test"]);
+  // One archive per model, each with that model's file name.
+  for (const [id, m] of Object.entries(local.MODELS)) {
+    const dir = join(FIX, `m-${id}`, "kokoro-test");
+    mkdirSync(join(dir, "dict"), { recursive: true });
+    for (const f of [m.file, "voices.bin", "tokens.txt", "lexicon-us-en.txt", "lexicon-zh.txt", "dict/jieba.dict"]) writeFileSync(join(dir, f), `${id} ${f}`);
+    execFileSync("tar", ["-cjf", join(FIX, `model-${id}.tar.bz2`), "-C", join(FIX, `m-${id}`), "kokoro-test"]);
+  }
   server = createServer((req, res) => {
     const file = join(FIX, req.url.slice(1));
     if (!existsSync(file)) return res.writeHead(404).end();
@@ -46,18 +49,22 @@ before(async () => {
 });
 after(() => server?.close());
 
-const sources = (overrides = {}) => ({
-  engine: { url: `${base}/engine.tgz`, hash: sri("sha512", join(FIX, "engine.tgz")), bytes: readFileSync(join(FIX, "engine.tgz")).length },
-  model: { url: `${base}/model.tar.bz2`, hash: sri("sha256", join(FIX, "model.tar.bz2")), bytes: readFileSync(join(FIX, "model.tar.bz2")).length },
-  ...overrides,
-});
+const engineSource = () => ({ url: `${base}/engine.tgz`, hash: sri("sha512", join(FIX, "engine.tgz")), bytes: readFileSync(join(FIX, "engine.tgz")).length });
+const modelSource = (id = "full") => ({ url: `${base}/model-${id}.tar.bz2`, hash: sri("sha256", join(FIX, `model-${id}.tar.bz2`)), bytes: readFileSync(join(FIX, `model-${id}.tar.bz2`)).length });
+const sources = (overrides = {}) => ({ engine: engineSource(), model: modelSource(), ...overrides });
 
 test("local voice: nothing is downloaded until asked", () => {
   const s = local.localStatus();
   assert.equal(s.ready, false);
   assert.equal(s.installing, null);
+  assert.equal(s.model, null);
   assert.equal(s.voices, local.LOCAL_VOICES.length);
-  assert.ok(s.download > 100e6 && s.disk > s.download, "sizes the page shows before downloading");
+  assert.deepEqual(s.models.map((m) => m.id), ["full", "small"], "full quality first");
+  for (const m of s.models) {
+    assert.ok(m.download > 100e6 && m.disk > m.download && m.memory > 0 && m.seconds > 0, `sizes and memory the page shows before downloading ${m.id}`);
+    assert.ok(existsSync(new URL(`../assets/local-samples/${m.id}.mp3`, import.meta.url)), `a sample of ${m.id} ships with Heads-up`);
+  }
+  assert.ok(s.models[0].download > s.models[1].download);
   assert.equal(existsSync(local.LOCAL_DIR), false);
 });
 
@@ -86,9 +93,42 @@ test("local voice: installs from pinned files, reports progress, and removes cle
     assert.equal(existsSync(join(local.LOCAL_DIR, "model", "dict")), false, "the Chinese front end is dropped");
     assert.equal(existsSync(join(local.LOCAL_DIR, "model", "lexicon-zh.txt")), false);
     assert.deepEqual(readdirSync(local.LOCAL_DIR).sort(), ["engine", "installed.json", "model"]);
+    assert.equal(s.model, "full");
     local.removeLocal();
     assert.equal(local.localStatus().ready, false);
     assert.equal(existsSync(local.LOCAL_DIR), false);
+  }));
+
+test("local voice: switching models keeps the engine, replaces the model and forgets its recordings", () =>
+  withTts(async () => {
+    await local.installLocal({ sources: sources() });
+    const engineFile = join(local.LOCAL_DIR, "engine", "sherpa-onnx.node");
+    const engineTime = statSync(engineFile).mtimeMs;
+    // Recordings made with the full model, plus one in a paid voice that must stay.
+    for (const d of [join(DATA, "segments", "local-am_michael"), join(DATA, "cache", "clips", "local-am_michael"), join(DATA, "segments", "american-male"), join(local.LOCAL_DIR, "previews")]) {
+      mkdirSync(d, { recursive: true });
+      writeFileSync(join(d, "x.wav"), "");
+    }
+    // A switch whose download is bad leaves the full model working.
+    const bad = { ...modelSource("small"), hash: "sha256-" + Buffer.alloc(32).toString("base64") };
+    await assert.rejects(local.installLocal({ model: "small", sources: { model: bad } }), /checksum/);
+    assert.equal(local.localStatus().model, "full");
+    assert.ok(existsSync(join(DATA, "segments", "local-am_michael", "x.wav")), "nothing forgotten on a failed switch");
+    const steps = [];
+    const s = await local.installLocal({ model: "small", sources: { model: modelSource("small") }, onProgress: (p) => steps.at(-1) !== p.step && steps.push(p.step) });
+    assert.equal(s.model, "small");
+    assert.equal(s.error, null);
+    assert.deepEqual(steps, ["model", "unpacking", "checking"], "the engine isn't downloaded again");
+    assert.equal(statSync(engineFile).mtimeMs, engineTime);
+    assert.ok(existsSync(join(local.LOCAL_DIR, "model", local.MODELS.small.file)));
+    assert.equal(existsSync(join(local.LOCAL_DIR, "model", local.MODELS.full.file)), false);
+    assert.equal(s.models.find((m) => m.id === "full").download, local.MODELS.full.bytes, "switching back needs only the model");
+    assert.equal(existsSync(join(DATA, "segments", "local-am_michael")), false);
+    assert.equal(existsSync(join(DATA, "cache", "clips", "local-am_michael")), false);
+    assert.equal(existsSync(join(local.LOCAL_DIR, "previews")), false);
+    assert.ok(existsSync(join(DATA, "segments", "american-male", "x.wav")), "paid voices' recordings stay");
+    await assert.rejects(local.installLocal({ model: "constructor" }), /unknown local model/);
+    local.removeLocal();
   }));
 
 test("local voices: only Kokoro's listed voices can be added", () => {

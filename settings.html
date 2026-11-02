@@ -633,6 +633,7 @@
       <h2>Local voice</h2>
       <p class="lede">Kokoro, a small voice model that runs on your Mac. It speaks Claude's lines, project names and your wording for free, with no key and no daily limit, and nothing you hear is sent anywhere. It's optional: voices from ElevenLabs and Sarvam keep working as before.</p>
       <div class="group" id="localBox"></div>
+      <p class="note" id="localNote"></p>
     </section>
 
     <section id="keys">
@@ -936,25 +937,45 @@ function render() {
   if (wave.voice !== c.voice) loadWave(c.voice, wave.id).catch(() => {});
 }
 
-// The local voice's row: download (with progress), ready, or the last error.
+// The local voice: one row per model (full quality, smaller), each with a sample to hear
+// before downloading. Shows download progress, what's installed with what it measured on
+// this Mac, and switching to the other model.
+const LOCAL_SOUND = { full: "Clear and natural.", small: "A little rough and buzzy, a third of the download." };
 function renderLocal() {
   const L = S.local, mb = (n) => Math.round(n / 1e6) + " MB";
-  let title, desc, controls = "";
-  if (!L.supported) [title, desc] = ["Not available here", "The local voice needs macOS on Apple silicon or Intel."];
-  else if (L.installing) {
-    const pct = L.installing.total ? Math.floor((L.installing.done / L.installing.total) * 100) : 0;
-    title = "Downloading the local voice";
-    desc = { engine: "Getting the engine, " + pct + "%", model: "Getting the voice model, " + pct + "% of " + mb(L.download), unpacking: "Unpacking…", checking: "Checking that it speaks…", elsewhere: "Downloading from another window…" }[L.installing.step];
-    controls = '<button class="btn" disabled>Downloading…</button>';
-  } else if (L.ready) {
-    [title, desc] = ["Ready on this Mac", L.voices + " voices, about " + mb(L.disk) + " on disk. A new line takes a few seconds to make; repeated lines play from the cache."];
-    controls = '<button class="btn" data-local-pick>Choose a voice</button><button class="btn" data-local-remove>Remove</button>';
-  } else {
-    title = "Download the local voice";
-    desc = (L.error ? "The last download stopped: " + L.error + ". " : "") + "A " + mb(L.download) + " download, about " + mb(L.disk) + " on disk. Then it's free to use as much as you like. Making a new line takes a few seconds and about 750 MB of memory, freed right after.";
-    controls = `<button class="btn primary" data-local-install>${L.error ? "Try again" : "Download"}</button>`;
+  if (!L.supported) {
+    $("#localBox").innerHTML = `<div class="row"><div class="text"><div class="title">Not available here</div><div class="desc">The local voice needs macOS on Apple silicon or Intel.</div></div></div>`;
+    $("#localNote").textContent = "";
+    return;
   }
-  $("#localBox").innerHTML = `<div class="row"><div class="text"><div class="title">${esc(title)}</div><div class="desc">${esc(desc)}</div></div><div class="controls">${controls}</div></div>`;
+  const busy = L.installing;
+  const step = busy && { engine: "Getting the engine", model: "Getting the voice model", unpacking: "Unpacking…", checking: "Checking that it speaks…", elsewhere: "Downloading from another window…" }[busy.step];
+  const pct = busy && busy.total ? Math.floor((busy.done / busy.total) * 100) : 0;
+  $("#localBox").innerHTML = L.models.map((m) => {
+    const here = L.model === m.id, downloading = busy && (busy.model ?? null) === m.id;
+    const tag = here && !downloading ? '<span class="tag">On this Mac</span>' : m.id === "full" && !L.ready && !downloading ? '<span class="tag">Recommended</span>' : "";
+    let desc, controls = `<button type="button" class="icon" data-local-sample="${esc(m.sample)}" aria-label="Hear a sample of the ${esc(m.label.toLowerCase())} model">${PLAY_SVG}</button>`;
+    if (downloading) {
+      desc = busy.step === "engine" || busy.step === "model" ? `${step}, ${pct}% of ${mb(busy.total)}` : step;
+      controls += '<button class="btn" disabled>Downloading…</button>';
+    } else if (here) {
+      const use = L.measured
+        ? `On this Mac a new line takes ${L.measured.seconds} s and ${L.measured.memory} MB of memory, freed right after.`
+        : `A new line takes about ${m.seconds} s and ${m.memory} MB of memory, freed right after.`;
+      desc = `${LOCAL_SOUND[m.id]} ${L.voices} voices, about ${mb(m.disk)} on disk. ${use}`;
+      controls += '<button class="btn" data-local-pick>Choose a voice</button><button class="btn" data-local-remove>Remove</button>';
+    } else {
+      desc = `${LOCAL_SOUND[m.id]} ${mb(m.download)} download, about ${mb(m.disk)} on disk. A new line takes about ${m.seconds} s and ${m.memory} MB of memory, freed right after.`;
+      const primary = !L.ready && m.id === "full" ? " primary" : "";
+      controls += `<button class="btn${primary}" data-local-install="${esc(m.id)}"${busy ? " disabled" : ""}>${L.ready ? "Switch to this" : "Download"}</button>`;
+    }
+    return `<div class="row"><div class="text"><div class="title">${esc(m.label)}${tag}</div><div class="desc">${esc(desc)}</div></div><div class="controls">${controls}</div></div>`;
+  }).join("");
+  $("#localNote").textContent = L.error
+    ? "The last download stopped: " + L.error + ". Nothing was changed; try again when you're ready."
+    : L.ready
+      ? "Switching downloads the other model and replaces this one. Lines already made are recorded again in the new one."
+      : "Both have the same 12 voices. Play each sample, then download the one you like. Memory is only used while a new line is being made; lines already made play instantly.";
 }
 
 // While a download runs, poll its progress; when it ends, reload everything.
@@ -968,7 +989,8 @@ function watchLocal() {
       S.local = local;
       if (local.installing) return renderLocal(), watchLocal();
       delete lib.voices.local;
-      toast(local.ready ? "The local voice is ready" : "The download stopped: " + (local.error ?? "unknown error"));
+      const m = local.models.find((x) => x.id === local.model);
+      toast(local.ready ? `${m.label} is ready` + (local.measured ? `: ${local.measured.seconds} s and ${local.measured.memory} MB per new line on this Mac` : "") : "The download stopped: " + (local.error ?? "unknown error"));
       refresh();
     } catch { watchLocal(); }
   }, 700);
@@ -1106,9 +1128,16 @@ document.addEventListener("click", (e) => {
     previewAudio.play().catch(() => toast("Couldn't play the preview"));
     return;
   }
-  if (b.dataset.localInstall !== undefined) {
+  if (b.dataset.localSample) {
+    previewAudio?.pause();
+    previewAudio = new Audio(b.dataset.localSample);
+    previewAudio.play().catch(() => toast("Couldn't play the sample"));
+    return;
+  }
+  if (b.dataset.localInstall) {
     b.disabled = true;
-    api("/api/local/install", {}).then((r) => { S.local = r.local; render(); }).catch((err) => { toast(err.message); b.disabled = false; });
+    previewAudio?.pause();
+    api("/api/local/install", { model: b.dataset.localInstall }).then((r) => { S.local = r.local; render(); }).catch((err) => { toast(err.message); b.disabled = false; });
     return;
   }
   if (b.dataset.localRemove !== undefined) {

@@ -5,6 +5,8 @@
 // is one pinned file, checked against its hash before it's unpacked.
 // Speech runs in a short child process (`node local.mjs speak`), one line at a time across
 // every session, so the model is only in memory while a line is being made.
+// Two builds of the model are offered (MODELS): full quality, or a smaller int8 build. The
+// user hears a sample of each on the settings page and picks one; one is installed at a time.
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -32,23 +34,47 @@ const ENGINE = {
   // Not a supported platform for Heads-up; here so the voice can be tested on Linux.
   "linux-x64": { url: "https://registry.npmjs.org/sherpa-onnx-linux-x64/-/sherpa-onnx-linux-x64-1.13.8.tgz", hash: "sha512-6plnhjagsSeTntCgnlag86hWbs/uZE9Crms1LgOb68/1nKsIQjMd+WG519m+aPwT6TrsBOiEMzrx41t8sL5L5g==", bytes: 11_089_653 },
 };
-// Kokoro v1.0 as sherpa-onnx packages it, full precision. The int8 build is a third of the
-// size but audibly rough (buzzy between the harmonics), and on Apple silicon it's about half
-// as fast, so the full model is worth the bigger download.
-const MODEL = {
-  name: "kokoro-multi-lang-v1_0",
-  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",
-  hash: "sha256-YHA3B7wFzNSNYOHrcj84sH1uR0eVoLaliNciBADg96Q=",
-  bytes: 349_886_476,
-  file: "model.onnx",
+// Kokoro v1.0 as sherpa-onnx packages it, in two builds with the same 54 voices. Full sounds
+// clean. The int8 build is a third of the size but audibly rough (buzzy between the
+// harmonics) and, on Apple silicon, about half as fast. disk: engine 33 MB + the unpacked
+// model, rounded up. memory/seconds: what one new line typically takes (measured on an
+// M4 MacBook Air); after an install the page shows what this Mac measured instead.
+export const MODELS = {
+  full: {
+    id: "full",
+    label: "Full quality",
+    name: "kokoro-multi-lang-v1_0",
+    url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",
+    hash: "sha256-YHA3B7wFzNSNYOHrcj84sH1uR0eVoLaliNciBADg96Q=",
+    bytes: 349_886_476,
+    file: "model.onnx",
+    disk: 420_000_000,
+    memory: 750,
+    seconds: 3,
+  },
+  small: {
+    id: "small",
+    label: "Smaller",
+    name: "kokoro-int8-multi-lang-v1_0",
+    url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2",
+    hash: "sha256-csNHIwEH74oxCY7E1GimBSRL7vXx7QDbl++hNRiABlM=",
+    bytes: 132_353_410,
+    file: "model.int8.onnx",
+    disk: 210_000_000,
+    memory: 520,
+    seconds: 4,
+  },
 };
-export const PINNED = { engine: ENGINE.version, model: MODEL.name, file: MODEL.file };
+export const DEFAULT_MODEL = "full";
+export const isModel = (id) => typeof id === "string" && Object.hasOwn(MODELS, id);
+export const PINNED = { engine: ENGINE.version, model: MODELS[DEFAULT_MODEL].name, file: MODELS[DEFAULT_MODEL].file };
 // The Chinese text front end isn't needed for English voices (about 17 MB).
 const UNUSED = ["dict", "lexicon-zh.txt", "date-zh.fst", "number-zh.fst", "phone-zh.fst"];
-export const DISK_BYTES = 420_000_000; // engine 33 MB + model 384 MB, rounded up
+// The line the install speaks to prove the model works and to measure this Mac.
+const CHECK_LINE = "The checkout fix is ready, and I need your review before I merge it.";
 
 const platform = `${process.platform}-${process.arch}`;
-export const defaultSources = () => ({ engine: ENGINE[platform] ?? null, model: MODEL });
+export const defaultSources = (model = DEFAULT_MODEL) => ({ engine: ENGINE[platform] ?? null, model: MODELS[model] });
 
 // The English voices Kokoro rates best, plus two Hindi voices that read English with an
 // Indian accent. sid is the speaker's number in this model.
@@ -84,29 +110,55 @@ const alive = (pid) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Installed, and the same engine and model this version of Heads-up pins.
-export function localReady() {
-  const i = readJson(INSTALLED);
-  return Boolean(i && i.engine === PINNED.engine && i.model === PINNED.model && existsSync(join(ENGINE_DIR, "sherpa-onnx.node")) && existsSync(join(MODEL_DIR, PINNED.file)));
-}
+const engineReady = (i) => Boolean(i && i.engine === ENGINE.version && existsSync(join(ENGINE_DIR, "sherpa-onnx.node")));
 
-// What the page and CLI show: { ready, installing: { step, done, total } | null, error,
-// download (bytes), disk (bytes), voices (count), supported }.
+// Which model is installed ("full" or "small"), if it's one this version of Heads-up pins and
+// its files are all there; otherwise null.
+export function installedModel() {
+  const i = readJson(INSTALLED);
+  const m = Object.values(MODELS).find((x) => x.name === i?.model);
+  return m && engineReady(i) && existsSync(join(MODEL_DIR, m.file)) ? m.id : null;
+}
+export const localReady = () => installedModel() !== null;
+
+// What the page and CLI show: { ready, model (installed id or null), measured ({ memory MB,
+// seconds } on this Mac, or null), models: [{ id, label, download, disk, memory, seconds,
+// sample }], installing: { step, done, total, model } | null, error, voices, supported }.
 let progress = null;
 let lastError = null;
 export function localStatus() {
   const held = readJson(INSTALL_LOCK);
-  const elsewhere = !progress && held && held.pid !== process.pid && alive(held.pid) ? { step: "elsewhere", done: 0, total: 0 } : null;
-  const { engine, model } = defaultSources();
+  const elsewhere = !progress && held && held.pid !== process.pid && alive(held.pid) ? { step: "elsewhere", done: 0, total: 0, model: held.model ?? null } : null;
+  const engine = ENGINE[platform] ?? null;
+  const i = readJson(INSTALLED);
+  const model = installedModel();
   return {
-    ready: localReady(),
+    ready: model !== null,
+    model,
+    measured: model && i?.measured ? i.measured : null,
+    models: Object.values(MODELS).map((m) => ({
+      id: m.id,
+      label: m.label,
+      download: (engineReady(i) ? 0 : (engine?.bytes ?? 0)) + m.bytes,
+      disk: m.disk,
+      memory: m.memory,
+      seconds: m.seconds,
+      sample: `/api/local/sample?model=${m.id}`,
+    })),
     installing: progress ?? elsewhere,
     error: lastError,
-    download: (engine?.bytes ?? 0) + model.bytes,
-    disk: DISK_BYTES,
     voices: LOCAL_VOICES.length,
     supported: Boolean(engine),
   };
+}
+
+// Lines recorded in a local voice were made by the model that's going away: drop them so the
+// next alert is recorded again with the new one.
+function forgetRecordings() {
+  for (const dir of [join(DATA, "segments"), join(DATA, "cache", "clips")]) {
+    for (const d of existsSync(dir) ? readdirSync(dir) : []) if (d.startsWith("local-")) rmSync(join(dir, d), { recursive: true, force: true });
+  }
+  rmSync(join(LOCAL_DIR, "previews"), { recursive: true, force: true });
 }
 
 // Streams a file through a hash and compares it with an SRI string ("sha256-<base64>").
@@ -149,52 +201,70 @@ function untar(file, dir) {
   });
 }
 
-// Downloads, checks and unpacks the engine and model, then speaks one word to prove they
-// load. Returns localStatus(). Safe to call again: a finished install is kept, a broken one
-// is replaced. sources: tests only.
-export async function installLocal({ sources = defaultSources(), onProgress = () => {} } = {}) {
-  if (!sources.engine) throw new Error(`the local voice isn't available for ${platform}`);
-  if (localReady() && sources.model === MODEL) return localStatus();
+// Downloads, checks and unpacks a model (and the engine, unless the pinned one is already
+// there), then speaks one line to prove it works and to measure memory and time on this Mac.
+// Installing the other model replaces the current one, which keeps working until the new one
+// is in place. Returns localStatus(). Safe to call again. sources: tests only.
+export async function installLocal({ model = DEFAULT_MODEL, sources, onProgress = () => {} } = {}) {
+  if (!isModel(model)) throw new Error(`unknown local model ${model}`);
+  if (!sources && installedModel() === model) return localStatus();
+  const src = { ...defaultSources(model), ...sources };
+  const m = { ...MODELS[model], ...src.model };
+  if (!src.engine) throw new Error(`the local voice isn't available for ${platform}`);
   mkdirSync(LOCAL_DIR, { recursive: true });
   try {
-    writeFileSync(INSTALL_LOCK, JSON.stringify({ pid: process.pid }), { flag: "wx" });
+    writeFileSync(INSTALL_LOCK, JSON.stringify({ pid: process.pid, model }), { flag: "wx" });
   } catch (e) {
     if (e.code !== "EEXIST") throw e;
     const held = readJson(INSTALL_LOCK);
     if (held && alive(held.pid)) throw new Error("the local voice is already downloading");
-    writeFileSync(INSTALL_LOCK, JSON.stringify({ pid: process.pid }));
+    writeFileSync(INSTALL_LOCK, JSON.stringify({ pid: process.pid, model }));
   }
+  const before = readJson(INSTALLED);
+  const keepEngine = !sources?.engine && engineReady(before);
   const staging = join(LOCAL_DIR, `staging-${process.pid}`);
-  const total = sources.engine.bytes + sources.model.bytes;
-  const step = (name, done) => onProgress((progress = { step: name, done, total }));
+  const parts = [...(keepEngine ? [] : [["engine", src.engine, join(staging, "engine.tgz")]]), ["model", m, join(staging, "model.tar.bz2")]];
+  const total = parts.reduce((n, [, p]) => n + p.bytes, 0);
+  const step = (name, done) => onProgress((progress = { step: name, done, total, model }));
   lastError = null;
+  let replaced = false;
   try {
     rmSync(staging, { recursive: true, force: true });
     mkdirSync(staging, { recursive: true });
-    const parts = [
-      ["engine", sources.engine, join(staging, "engine.tgz"), 0],
-      ["model", sources.model, join(staging, "model.tar.bz2"), sources.engine.bytes],
-    ];
-    for (const [name, src, file, before] of parts) {
-      step(name, before);
-      await download(src.url, file, (n) => step(name, before + Math.min(n, src.bytes)));
-      if (!(await verify(file, src.hash))) throw new Error(`the ${name} download didn't match its checksum, so it wasn't used`);
+    let done = 0;
+    for (const [name, part, file] of parts) {
+      step(name, done);
+      await download(part.url, file, (n) => step(name, done + Math.min(n, part.bytes)));
+      if (!(await verify(file, part.hash))) throw new Error(`the ${name} download didn't match its checksum, so it wasn't used`);
+      done += part.bytes;
     }
     step("unpacking", total);
-    await untar(parts[0][2], join(staging, "engine"));
-    await untar(parts[1][2], join(staging, "model"));
-    const modelDir = readdirSync(join(staging, "model")).map((d) => join(staging, "model", d)).find((d) => existsSync(join(d, MODEL.file)));
-    if (!existsSync(join(staging, "engine", "package", "sherpa-onnx.node")) || !modelDir) throw new Error("the download is missing files");
+    if (!keepEngine) await untar(join(staging, "engine.tgz"), join(staging, "engine"));
+    await untar(join(staging, "model.tar.bz2"), join(staging, "model"));
+    const modelDir = readdirSync(join(staging, "model")).map((d) => join(staging, "model", d)).find((d) => existsSync(join(d, m.file)));
+    if ((!keepEngine && !existsSync(join(staging, "engine", "package", "sherpa-onnx.node"))) || !modelDir) throw new Error("the download is missing files");
     for (const f of UNUSED) rmSync(join(modelDir, f), { recursive: true, force: true });
-    for (const d of [ENGINE_DIR, MODEL_DIR]) rmSync(d, { recursive: true, force: true });
-    renameSync(join(staging, "engine", "package"), ENGINE_DIR);
+    // Until here the old install (if any) is untouched and still speaks. From here it's
+    // replaced: unmark it first so nothing uses a half-moved folder.
+    replaced = true;
+    rmSync(INSTALLED, { force: true });
+    if (!keepEngine) {
+      rmSync(ENGINE_DIR, { recursive: true, force: true });
+      renameSync(join(staging, "engine", "package"), ENGINE_DIR);
+    }
+    rmSync(MODEL_DIR, { recursive: true, force: true });
     renameSync(modelDir, MODEL_DIR);
-    writeFileSync(INSTALLED, JSON.stringify({ engine: ENGINE.version, model: MODEL.name, at: new Date().toISOString() }, null, 2) + "\n");
+    forgetRecordings();
+    const record = { engine: ENGINE.version, model: m.name, at: new Date().toISOString() };
+    writeFileSync(INSTALLED, JSON.stringify(record, null, 2) + "\n");
     step("checking", total);
-    if (process.env.HEADS_UP_FAKE_TTS !== "1") await speakLocal("af_heart", "Hello.");
+    if (process.env.HEADS_UP_FAKE_TTS !== "1") {
+      const { stats } = await runSpeak(LOCAL_VOICES[0], CHECK_LINE);
+      writeFileSync(INSTALLED, JSON.stringify({ ...record, measured: stats }, null, 2) + "\n");
+    }
   } catch (e) {
     lastError = String(e.message).slice(0, 200);
-    rmSync(INSTALLED, { force: true });
+    if (replaced) rmSync(INSTALLED, { force: true }); // the new model is in place but doesn't work
     throw e;
   } finally {
     progress = null;
@@ -207,6 +277,7 @@ export async function installLocal({ sources = defaultSources(), onProgress = ()
 export function removeLocal() {
   if (progress) throw new Error("the local voice is still downloading");
   rmSync(LOCAL_DIR, { recursive: true, force: true });
+  forgetRecordings();
   lastError = null;
 }
 
@@ -246,13 +317,23 @@ export async function speakLocal(voiceId, text) {
   const v = LOCAL_VOICES.find((x) => x.id === voiceId);
   if (!v) throw new Error(`unknown local voice ${voiceId}`);
   if (!localReady()) throw new Error("the local voice isn't downloaded");
+  return (await runSpeak(v, text)).wav;
+}
+
+// One line in a fresh child process: { wav, stats: { memory (peak MB), seconds (start to
+// finish, model load included: what an alert waits for) } }.
+function runSpeak(v, text) {
+  const file = MODELS[installedModel()]?.file;
   return withSpeakLock(
     () =>
       new Promise((resolve, reject) => {
         const out = join(LOCAL_DIR, `line-${process.pid}-${Date.now()}.wav`);
         const env = { ...process.env, DYLD_LIBRARY_PATH: ENGINE_DIR, LD_LIBRARY_PATH: ENGINE_DIR };
-        const p = spawn(process.execPath, [fileURLToPath(import.meta.url), "speak"], { env, stdio: ["pipe", "ignore", "pipe"] });
+        const start = Date.now();
+        const p = spawn(process.execPath, [fileURLToPath(import.meta.url), "speak"], { env, stdio: ["pipe", "pipe", "pipe"] });
         let err = "";
+        let said = "";
+        p.stdout.on("data", (d) => (said = (said + d).slice(-500)));
         p.stderr.on("data", (d) => (err = (err + d).slice(-2000)));
         const timer = setTimeout(() => p.kill("SIGKILL"), SPEAK_TIMEOUT_MS);
         p.on("error", (e) => (clearTimeout(timer), reject(e)));
@@ -260,14 +341,15 @@ export async function speakLocal(voiceId, text) {
           clearTimeout(timer);
           try {
             if (code !== 0) throw new Error(signal ? "the local voice took too long" : `the local voice failed: ${reason(err) || `exit ${code}`}`);
-            resolve(readFileSync(out));
+            const memory = Number(JSON.parse(said.trim().split("\n").pop() || "{}").memory) || null;
+            resolve({ wav: readFileSync(out), stats: { memory, seconds: Math.round((Date.now() - start) / 100) / 10 } });
           } catch (e) {
             reject(e);
           } finally {
             rmSync(out, { force: true });
           }
         });
-        p.stdin.end(JSON.stringify({ text, sid: v.sid, british: v.id.startsWith("b"), out }));
+        p.stdin.end(JSON.stringify({ text, sid: v.sid, british: v.id.startsWith("b"), file, out }));
       }),
   );
 }
@@ -277,7 +359,7 @@ function speakMain() {
   const job = JSON.parse(readFileSync(0, "utf8"));
   const sherpa = createRequire(import.meta.url)(join(ENGINE_DIR, "sherpa-onnx.node"));
   const kokoro = {
-    model: join(MODEL_DIR, MODEL.file),
+    model: join(MODEL_DIR, job.file),
     voices: join(MODEL_DIR, "voices.bin"),
     tokens: join(MODEL_DIR, "tokens.txt"),
     dataDir: join(MODEL_DIR, "espeak-ng-data"),
@@ -288,6 +370,8 @@ function speakMain() {
   const audio = sherpa.offlineTtsGenerate(tts, { text: job.text, sid: job.sid, speed: 1 });
   if (!audio?.samples?.length) throw new Error("no audio came back");
   sherpa.writeWave(job.out, { samples: audio.samples, sampleRate: audio.sampleRate });
+  // Peak memory of this process, for the settings page (maxRSS is in kilobytes).
+  process.stdout.write(JSON.stringify({ memory: Math.round(process.resourceUsage().maxRSS / 1024) }) + "\n");
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url) && process.argv[2] === "speak") speakMain();

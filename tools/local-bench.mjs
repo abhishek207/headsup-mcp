@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Measures the local voice on this computer: model load time, time per line, real-time
 // factor and peak memory, on 2 and 4 threads. Installs the voice first if it isn't there.
-//   node tools/local-bench.mjs           the pinned full-precision model
-//   node tools/local-bench.mjs --int8    also the int8 model, for comparison (a 132 MB download)
+//   node tools/local-bench.mjs           the installed model (installs the full one if none is)
+//   node tools/local-bench.mjs --both    also the other model, for comparison (downloaded apart)
 // Then times a real alert the way Claude makes one: "Hello from <project>." plus a line, first
 // with nothing cached, then with the greeting cached. That part needs ffmpeg.
 // Set HEADS_UP_HOME to a temp folder to keep it apart from your real settings.
@@ -14,10 +14,6 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const LINES = ["Hello from Kosh.", "The checkout fix is ready, and I need your review before I merge it.", "Tests passed on the second try. Should I deploy the Brand Bakery Hub now, or wait for you?"];
-const INT8 = {
-  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2",
-  hash: "sha256-csNHIwEH74oxCY7E1GimBSRL7vXx7QDbl++hNRiABlM=",
-};
 
 if (process.argv[2] === "child") {
   // One configuration in a fresh process, so peak memory is its own.
@@ -38,24 +34,26 @@ if (process.argv[2] === "child") {
   process.exit(0);
 }
 
-const { LOCAL_DIR, PINNED, installLocal, localReady, verify } = await import("../local.mjs");
+const { LOCAL_DIR, MODELS, installLocal, installedModel, localReady, verify } = await import("../local.mjs");
 if (!localReady()) {
   console.log("Installing the local voice…");
   await installLocal();
 }
 const engine = join(LOCAL_DIR, "engine");
-const models = [["full", join(LOCAL_DIR, "model"), PINNED.file]];
-if (process.argv.includes("--int8")) {
-  const dir = join(LOCAL_DIR, "bench-int8");
-  const archive = join(dir, "int8.tar.bz2");
-  if (!existsSync(join(dir, "kokoro-int8-multi-lang-v1_0", "model.int8.onnx"))) {
+const here = MODELS[installedModel()];
+const models = [[here.id, join(LOCAL_DIR, "model"), here.file]];
+if (process.argv.includes("--both")) {
+  const other = Object.values(MODELS).find((m) => m.id !== here.id);
+  const dir = join(LOCAL_DIR, `bench-${other.id}`);
+  const archive = join(dir, "model.tar.bz2");
+  if (!existsSync(join(dir, other.name, other.file))) {
     mkdirSync(dir, { recursive: true });
-    console.log("Downloading the int8 model (132 MB)…");
-    execFileSync("curl", ["-fsSL", "--proto", "=https", "-o", archive, INT8.url], { stdio: "inherit" });
-    if (!(await verify(archive, INT8.hash))) throw new Error("checksum mismatch");
+    console.log(`Downloading the ${other.label.toLowerCase()} model (${Math.round(other.bytes / 1e6)} MB)…`);
+    execFileSync("curl", ["-fsSL", "--proto", "=https", "-o", archive, other.url], { stdio: "inherit" });
+    if (!(await verify(archive, other.hash))) throw new Error("checksum mismatch");
     execFileSync("tar", ["-xf", archive, "-C", dir]);
   }
-  models.push(["int8", join(dir, "kokoro-int8-multi-lang-v1_0"), "model.int8.onnx"]);
+  models.push([other.id, join(dir, other.name), other.file]);
 }
 
 const cpu = process.platform === "darwin" ? spawnSync("sysctl", ["-n", "machdep.cpu.brand_string"], { encoding: "utf8" }).stdout.trim() : process.arch;

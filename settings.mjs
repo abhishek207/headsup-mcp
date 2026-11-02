@@ -7,7 +7,7 @@ import { createReadStream, mkdirSync, readFileSync, writeFileSync } from "node:f
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { GREETING, HARD_CAP, ROOT, TEMPLATES, activeFocus, alert, blockedReason, builtinVoices, clipFor, currentLocation, detectorProblems, findClip, getVolume, idleSeconds, isProjectName, libraryVoiceId, listVoices, loadConfig, loadHistory, nameRecorded, outputDevice, probeDetectors, recordAlerts, recordingCost, saveConfig, spokenName, textFor } from "./core.mjs";
-import { LOCAL_DIR, LOCAL_VOICES, installLocal, localReady, localStatus, removeLocal } from "./local.mjs";
+import { LOCAL_DIR, LOCAL_VOICES, MODELS, installLocal, isModel, localReady, localStatus, removeLocal } from "./local.mjs";
 import { composed, usageSummary, voiceInfo } from "./speech.mjs";
 import { PROVIDERS, cachedSegment, checkKey, deleteKey, elevenUsage, keySource, providerVoices, saveKey, segKey, synth } from "./tts.mjs";
 
@@ -277,11 +277,22 @@ const server = createServer(async (req, res) => {
       const p = await r.prepared;
       return p.live ? json(200, { line: p.line, state: await state() }) : json(400, { error: p.note ?? "That key didn't work" });
     }
-    // The local voice: download in the background (the page polls /api/local), or delete it.
+    // The local voice: download a model in the background (the page polls /api/local), switch
+    // to the other one the same way, or delete it.
     if (req.method === "GET" && url.pathname === "/api/local") return json(200, { local: localStatus() });
     if (req.method === "POST" && url.pathname === "/api/local/install") {
-      if (!localStatus().installing) installLocal().catch(() => {}); // the error shows in localStatus()
+      const { model } = await readBody(req);
+      if (!isModel(model)) return json(400, { error: "unknown model" });
+      if (!localStatus().installing) installLocal({ model }).catch(() => {}); // the error shows in localStatus()
       return json(200, { local: localStatus() });
+    }
+    // What each model sounds like, before downloading it (two short clips shipped with Heads-up).
+    if (req.method === "GET" && url.pathname === "/api/local/sample") {
+      const id = url.searchParams.get("model");
+      if (!isModel(id)) return json(404, { error: "unknown model" });
+      const m = MODELS[id];
+      res.writeHead(200, { "content-type": "audio/mpeg", "cache-control": "max-age=3600" });
+      return createReadStream(join(ROOT, "assets", "local-samples", `${m.id}.mp3`)).pipe(res);
     }
     if (req.method === "POST" && url.pathname === "/api/local/remove") {
       removeLocal();
