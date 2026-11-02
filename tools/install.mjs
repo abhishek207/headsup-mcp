@@ -292,7 +292,7 @@ async function main() {
   if (dry) console.log("\nDry run: nothing was changed.");
   else {
     console.log("\nDone. Restart open Claude Code sessions so they load the plugin, then run headsup to open the settings page.");
-    console.log("Out of the box, heads-up plays its built-in lines. To hear project names or the agent's own words, add your ElevenLabs or Sarvam key on that page.");
+    console.log("Out of the box, heads-up plays its built-in lines. To hear project names or the agent's own words, turn on the free local voice (headsup local install, or on that page) or add your ElevenLabs or Sarvam key there.");
   }
   if (todo.length) console.log(`\nClaude Code's command wasn't found. Run these yourself:\n  ${todo.join("\n  ")}`);
 }
