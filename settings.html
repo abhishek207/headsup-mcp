@@ -469,7 +469,7 @@
         <h3>Add a voice</h3>
         <div class="group">
           <div class="row lib-head">
-            <div class="segmented" role="group" aria-label="Provider"><button data-lib="local">On this Mac</button><button data-lib="elevenlabs">ElevenLabs</button><button data-lib="sarvam">Sarvam</button></div>
+            <div class="segmented" role="group" aria-label="Provider"><button data-lib="local">On this <span data-word="machine">Mac</span></button><button data-lib="elevenlabs">ElevenLabs</button><button data-lib="sarvam">Sarvam</button></div>
             <input class="field" id="libSearch" placeholder="Search by name, accent or style" aria-label="Search voices">
             <button class="btn" data-lib-close>Done</button>
           </div>
@@ -635,7 +635,7 @@
 
     <section id="local">
       <h2>Local voice</h2>
-      <p class="lede">Kokoro, a small voice model that runs on your Mac. It speaks Claude's lines, project names and your wording for free, with no key and no daily limit, and nothing you hear is sent anywhere. It's optional: voices from ElevenLabs and Sarvam keep working as before.</p>
+      <p class="lede">Kokoro, a small voice model that runs on your <span data-word="machine">Mac</span>. It speaks Claude's lines, project names and your wording for free, with no key and no daily limit, and nothing you hear is sent anywhere. It's optional: voices from ElevenLabs and Sarvam keep working as before.</p>
       <div class="group" id="localBox"></div>
       <p class="note" id="localNote"></p>
       <div class="group" id="localOptions" hidden>
@@ -763,7 +763,7 @@ async function play(id, voice) {
   try {
     const v = voice ?? S.config.voice;
     const p = infoOf(v)?.provider;
-    if (S.recordCost[v] && canRecord(p)) toast(p === "local" ? "Making it on your Mac…" : "Recording with your key…");
+    if (S.recordCost[v] && canRecord(p)) toast(p === "local" ? `Making it on your ${S.words.machine}…` : "Recording with your key…");
     const r = await api("/api/test", voice ? { status: id, voice } : { status: id });
     pollPlaying();
     await loadWave(voice ?? S.config.voice, id).catch(() => {});
@@ -949,7 +949,7 @@ function render() {
 
   $("#liveDesc").textContent = !anyKey ? "Needs the local voice or your own ElevenLabs or Sarvam key (see below). Until then the regular alert plays."
     : !c.live.enabled ? "Off: Claude's lines are ignored and the regular alert plays."
-    : provider === "local" ? (S.local.ready ? "Lines are spoken on your Mac by the local voice. Nothing is sent anywhere, and there's no daily limit." : "Download the local voice below. Until then the regular alert plays.")
+    : provider === "local" ? (S.local.ready ? "Lines are spoken on your " + S.words.machine + " by the local voice. Nothing is sent anywhere, and there's no daily limit." : "Download the local voice below. Until then the regular alert plays.")
     : S.keys[provider] ? "Lines are recorded with your " + PROVIDER[provider] + " key and sent to " + PROVIDER[provider] + ", so Claude is told to keep code and secrets out of them."
     : S.local?.ready ? "Pick a local voice under Voice to hear Claude's lines for free, or add a " + PROVIDER[provider] + " key below."
     : "Add a " + PROVIDER[provider] + " key below. Until then the regular alert plays.";
@@ -981,7 +981,7 @@ function render() {
 
 // The local voice: one row per model (full quality, smaller), each with a sample to hear
 // before downloading. Shows download progress, what's installed with what it measured on
-// this Mac, and switching to the other model.
+// this computer, and switching to the other model.
 const LOCAL_SOUND = { full: "Clear and natural.", small: "A little rough and buzzy, and about half as fast. A third of the download." };
 const speedLabel = (v) => Number(v).toFixed(2).replace(/0$/, "") + "×";
 function renderLocal() {
@@ -1000,14 +1000,14 @@ function renderLocal() {
   const pct = busy && busy.total ? Math.floor((busy.done / busy.total) * 100) : 0;
   $("#localBox").innerHTML = L.models.map((m) => {
     const here = L.model === m.id, downloading = busy && (busy.model ?? null) === m.id;
-    const tag = here && !downloading ? '<span class="tag">On this Mac</span>' : m.id === "full" && !L.ready && !downloading ? '<span class="tag">Recommended</span>' : "";
+    const tag = here && !downloading ? `<span class="tag">On this ${S.words.machine}</span>` : m.id === "full" && !L.ready && !downloading ? '<span class="tag">Recommended</span>' : "";
     let desc, controls = `<button type="button" class="icon" data-local-sample="${esc(m.sample)}" aria-label="Hear a sample of the ${esc(m.label.toLowerCase())} model">${PLAY_SVG}</button>`;
     if (downloading) {
       desc = busy.step === "engine" || busy.step === "model" ? `${step}, ${pct}% of ${mb(busy.total)}` : step;
       controls += '<button class="btn" disabled aria-busy="true">Downloading…</button>';
     } else if (here) {
       const use = L.measured
-        ? `On this Mac a new line takes ${L.measured.seconds} s and ${L.measured.memory} MB of memory, freed right after.`
+        ? `On this ${S.words.machine} a new line takes ${L.measured.seconds} s and ${L.measured.memory} MB of memory, freed right after.`
         : `A new line takes about ${m.seconds} s and ${m.memory} MB of memory, freed right after.`;
       desc = `${LOCAL_SOUND[m.id]} ${L.voices} voices, about ${mb(m.disk)} on disk. ${use}`;
       controls += '<button class="btn" data-local-pick>Choose a voice</button><button class="btn" data-local-remove>Remove</button>';
@@ -1037,7 +1037,7 @@ function watchLocal() {
       if (local.installing) return renderLocal(), watchLocal();
       delete lib.voices.local;
       const m = local.models.find((x) => x.id === local.model);
-      toast(local.ready ? `${m.label} is ready` + (local.measured ? `: ${local.measured.seconds} s and ${local.measured.memory} MB per new line on this Mac` : "") : "The download stopped: " + (local.error ?? "unknown error"));
+      toast(local.ready ? `${m.label} is ready` + (local.measured ? `: ${local.measured.seconds} s and ${local.measured.memory} MB per new line on this ${S.words.machine}` : "") : "The download stopped: " + (local.error ?? "unknown error"));
       refresh();
     } catch { watchLocal(); }
   }, 700);
@@ -1053,7 +1053,7 @@ function voiceNote() {
       ? (local ? `Download the local voice below to hear ${info.name}.` : `Add a ${pname} key below to record alerts in ${info.name}.`) + ` Until then you'll hear the ${voiceName(info.fallback)} voice.`
       : `Add a ${pname} key below to record your edited lines. Until then you'll hear the original ones.` };
   }
-  if (local) return { record: true, text: `Each alert is made in ${info.name} on your Mac the first time it plays, for free. Making all of them now takes a minute or two.` };
+  if (local) return { record: true, text: `Each alert is made in ${info.name} on your ${S.words.machine} the first time it plays, for free. Making all of them now takes a minute or two.` };
   return { record: true, text: custom
     ? `Each alert is recorded in ${info.name} the first time it plays. Recording all of them now uses about ${num(cost)} ${pname} characters.`
     : `Your edited wording isn't recorded in this voice yet: about ${num(cost)} ${pname} characters.` };
@@ -1078,7 +1078,7 @@ function renderLibrary() {
       </div>
     </div>`).join("") : '<div class="row"><div class="text"><div class="desc">No voices match.</div></div></div>')
     + `<div class="row"><div class="text"><div class="desc">${lib.provider === "local"
-      ? (S.local?.ready ? "These voices run on your Mac with Kokoro. Previews play here in the browser and cost nothing." : "Hear each voice now; download the local voice below to use them.") + " Alpha and Omega are Hindi voices reading English, so hear them before you pick one."
+      ? (S.local?.ready ? "These voices run on your " + S.words.machine + " with Kokoro. Previews play here in the browser and cost nothing." : "Hear each voice now; download the local voice below to use them.") + " Alpha and Omega are Hindi voices reading English, so hear them before you pick one."
       : lib.provider === "elevenlabs"
       ? "These are the voices in your ElevenLabs account. To use one from the ElevenLabs Voice Library, add it to My Voices on elevenlabs.io, then reopen this list. Previews play here in the browser and are free."
       : "Sarvam voices speak Indian English. Add one, then press its play button to hear it on your " + S.words.machine + " (about 30 characters)."}</div></div></div>`;
@@ -1171,7 +1171,7 @@ document.addEventListener("click", (e) => {
     previewAudio?.pause();
     previewAudio = new Audio(b.dataset.libPreview);
     // Samples ship with Heads-up or are kept once made; say so only when one is being made.
-    const slow = setTimeout(() => toast("Making a sample on your Mac…"), 800);
+    const slow = setTimeout(() => toast(`Making a sample on your ${S.words.machine}…`), 800);
     previewAudio.addEventListener("playing", () => clearTimeout(slow), { once: true });
     previewAudio.play().catch(() => (clearTimeout(slow), toast("Couldn't play the preview")));
     return;
@@ -1222,7 +1222,7 @@ document.addEventListener("click", (e) => {
       .then((r) => {
         S = r.state; editing = null; render();
         const free = infoOf(S.config.voice)?.provider === "local";
-        toast(!text ? "Back to the original words" : r.note ? "Saved. Not recorded yet: " + r.note : free ? "Saved and made on your Mac" : "Saved and recorded, " + num(r.spent) + " characters");
+        toast(!text ? "Back to the original words" : r.note ? "Saved. Not recorded yet: " + r.note : free ? `Saved and made on your ${S.words.machine}` : "Saved and recorded, " + num(r.spent) + " characters");
         if (text && !r.note) play(id);
       })
       .catch((err) => { toast(err.message); b.disabled = false; });

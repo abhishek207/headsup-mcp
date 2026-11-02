@@ -151,7 +151,7 @@ async function handle(msg) {
       return {
         protocolVersion: msg.params?.protocolVersion ?? "2025-06-18",
         capabilities: { tools: {} },
-        serverInfo: { name: "heads-up", version: "1.6.0" },
+        serverInfo: { name: "heads-up", version: "1.7.0" },
       };
     case "ping":
       return {};

@@ -34,8 +34,10 @@ const ENGINE = {
   version: "1.13.8",
   "darwin-arm64": { url: "https://registry.npmjs.org/sherpa-onnx-darwin-arm64/-/sherpa-onnx-darwin-arm64-1.13.8.tgz", hash: "sha512-FPNgJMgnWVl/KhRTIhG3KL3A4Om63Rn4YKXc9/uHY7SzLcvqLJLc/h7UBWJwduXvv7K18t5NpxHR6XgXn4sjWw==", bytes: 10_047_754 },
   "darwin-x64": { url: "https://registry.npmjs.org/sherpa-onnx-darwin-x64/-/sherpa-onnx-darwin-x64-1.13.8.tgz", hash: "sha512-7BLRpjM6w4f9W46/nmkmq8lEKUayhebvcpslCVQ+6QN2uReYlZEMDZlSpXMjme+hUFrPfRz8P3UNq8ep/4d19g==", bytes: 11_191_481 },
-  // Not a supported platform for Heads-up; here so the voice can be tested on Linux.
   "linux-x64": { url: "https://registry.npmjs.org/sherpa-onnx-linux-x64/-/sherpa-onnx-linux-x64-1.13.8.tgz", hash: "sha512-6plnhjagsSeTntCgnlag86hWbs/uZE9Crms1LgOb68/1nKsIQjMd+WG519m+aPwT6TrsBOiEMzrx41t8sL5L5g==", bytes: 11_089_653 },
+  "linux-arm64": { url: "https://registry.npmjs.org/sherpa-onnx-linux-arm64/-/sherpa-onnx-linux-arm64-1.13.8.tgz", hash: "sha512-Tlg7a70b/Wge3OF8IgTHF9jhSVCsLyKQKhwc4BsJ5A+dL/SrFtGBjzuHp4XeLhiiOT7afCxX5PdSn/D4c8Lnuw==", bytes: 13_910_679 },
+  // Untested on a real Windows PC yet (see README). curl.exe and tar.exe ship with Windows 10 and 11.
+  "win32-x64": { url: "https://registry.npmjs.org/sherpa-onnx-win-x64/-/sherpa-onnx-win-x64-1.13.8.tgz", hash: "sha512-oZF1c9VPOKtMwn83Bboc5XSWL+76BRoyB3eUuVnCknBKxwSULZU2Foia9VHWzU+n4I12rPsP6z6H9Rp1hD9o8g==", bytes: 8_894_875 },
 };
 // Kokoro v1.0 as sherpa-onnx packages it, in two builds with the same 54 voices. Full sounds
 // clean. The int8 build is a third of the size but audibly rough (buzzy between the
@@ -181,7 +183,7 @@ export function verify(file, sri) {
 function download(url, out, onBytes) {
   const proto = /^http:\/\/127\.0\.0\.1[:/]/.test(url) ? "=http" : "=https";
   return new Promise((resolve, reject) => {
-    const p = spawn("curl", ["-fsSL", "--proto", proto, "--proto-redir", proto, "--retry", "2", "--connect-timeout", "20", "--max-time", "1800", "-o", out, url], { stdio: ["ignore", "ignore", "pipe"] });
+    const p = spawn("curl", ["-fsSL", "--proto", proto, "--proto-redir", proto, "--retry", "2", "--connect-timeout", "20", "--max-time", "1800", "-o", out, url], { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
     let err = "";
     p.stderr.on("data", (d) => (err += d));
     const tick = setInterval(() => onBytes(statSync(out, { throwIfNoEntry: false })?.size ?? 0), 400);
@@ -196,7 +198,7 @@ function download(url, out, onBytes) {
 function untar(file, dir) {
   mkdirSync(dir, { recursive: true });
   return new Promise((resolve, reject) => {
-    const p = spawn("tar", ["-xf", file, "-C", dir], { stdio: ["ignore", "ignore", "pipe"] });
+    const p = spawn("tar", ["-xf", file, "-C", dir], { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
     let err = "";
     p.stderr.on("data", (d) => (err += d));
     p.on("error", reject);
@@ -350,9 +352,11 @@ function runSpeak(v, texts, speed = 1, onPart = () => {}) {
         const dir = join(LOCAL_DIR, `line-${process.pid}-${Date.now()}`);
         mkdirSync(dir, { recursive: true });
         const outs = texts.map((_, i) => join(dir, `${i}.wav`));
-        const env = { ...process.env, DYLD_LIBRARY_PATH: ENGINE_DIR, LD_LIBRARY_PATH: ENGINE_DIR };
+        // The engine's libraries sit next to it: macOS and Linux find them through these
+        // variables, Windows through PATH.
+        const env = { ...process.env, DYLD_LIBRARY_PATH: ENGINE_DIR, LD_LIBRARY_PATH: ENGINE_DIR, ...(process.platform === "win32" && { PATH: `${ENGINE_DIR};${process.env.PATH ?? ""}` }) };
         const start = Date.now();
-        const p = spawn(process.execPath, [fileURLToPath(import.meta.url), "speak"], { env, stdio: ["pipe", "pipe", "pipe"] });
+        const p = spawn(process.execPath, [fileURLToPath(import.meta.url), "speak"], { env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
         let err = "";
         let buf = "";
         let memory = null;
