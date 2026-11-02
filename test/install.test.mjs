@@ -1,7 +1,7 @@
 import { DATA } from "./helpers.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
@@ -69,4 +69,12 @@ test("installer: odd install paths stay plain text in the headsup command", { sk
   }
   assert.equal(existsSync(join(DATA, "pwned")), false);
   assert.equal(quote("/usr/local/bin/node"), "/usr/local/bin/node");
+});
+
+test("installer: runs when started through a symlinked folder (macOS /var is /private/var)", { skip: process.platform === "win32" && "symlinks need admin" }, () => {
+  const link = join(DATA, "linked-checkout");
+  symlinkSync(join(import.meta.dirname, ".."), link);
+  const env = { ...process.env, HOME: join(DATA, "home"), CLAUDE_CONFIG_DIR: join(DATA, "claude-cfg"), PATH: "/usr/bin:/bin" };
+  const r = spawnSync(process.execPath, [join(link, "tools", "install.mjs"), "--dry-run"], { encoding: "utf8", env });
+  assert.match(r.stdout, /Dry run: nothing was changed/);
 });
