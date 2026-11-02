@@ -8,7 +8,7 @@
 import { statSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
-import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, maxChars, projectFor, textFor } from "./core.mjs";
+import { ROOT, STATUSES, TEMPLATES, alert, allPlayed, detectorProblems, loadConfig, maxChars, projectFor, textFor } from "./core.mjs";
 import { voiceInfo } from "./speech.mjs";
 
 const config = loadConfig();
@@ -138,3 +138,16 @@ createInterface({ input: process.stdin }).on("line", async (line) => {
     send({ jsonrpc: "2.0", id: msg.id, error: { code: e.code ?? -32603, message: e.message ?? String(e) } });
   }
 });
+
+// When the session ends (its input closes, or it's told to stop), finish the alert that's
+// being made or played, up to two minutes, instead of cutting it off mid-sentence.
+let closing = false;
+function finish() {
+  if (closing) return;
+  closing = true;
+  const limit = setTimeout(() => process.exit(0), 120_000);
+  allPlayed().finally(() => (clearTimeout(limit), process.exit(0)));
+}
+process.stdin.on("end", finish);
+process.on("SIGTERM", finish);
+process.on("SIGINT", finish);

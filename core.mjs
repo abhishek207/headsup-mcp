@@ -533,8 +533,8 @@ export function projectFor(cwd) {
   return isProjectName(name) ? name : null;
 }
 
-// False for names that aren't worth announcing (temp, scratch, generic or hash-like folders).
-export const isProjectName = (name) => Boolean(name) && !GENERIC_DIRS.test(name) && !/^[0-9a-f-]{16,}$/i.test(name);
+// False for names that aren't worth announcing (temp, scratch, generic, hash-like or dated folders).
+export const isProjectName = (name) => Boolean(name) && !GENERIC_DIRS.test(name) && !/^[0-9a-f-]{16,}$/i.test(name) && !/^\d{4}-\d{2}(-\d{2})?\b/.test(name);
 
 // How a project's name is spoken: the user's alias, else "brand-bakery-hub" -> "Brand Bakery Hub".
 export function spokenName(project, c = loadConfig()) {
@@ -691,3 +691,6 @@ export function alert(status, { repeat = 1, volume, force = false, source = "cla
   const line = `${greet} ${said && (c.live.enabled || force) ? said : textFor(status, c)}`;
   return { ok: true, played: true, line, prepared, done: queue };
 }
+
+// Resolves when every alert this process started has finished playing.
+export const allPlayed = () => queue;

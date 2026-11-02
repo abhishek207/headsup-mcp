@@ -144,8 +144,9 @@ test("project names", () => {
   assert.equal(spokenName("brand-bakery-hub", normalize({})), "Brand Bakery Hub");
   assert.equal(spokenName("ocr_api-tool", normalize({})), "OCR API Tool");
   assert.equal(spokenName("kosh", normalize({ project_names: { aliases: { kosh: "Kosh App" } } })), "Kosh App");
-  for (const n of ["Downloads", "scratch-1", "tmp", "0123456789abcdef0123"]) assert.equal(isProjectName(n), false, n);
+  for (const n of ["Downloads", "scratch-1", "tmp", "0123456789abcdef0123", "2026-11-02", "2026-10", "2026-11-04-clips"]) assert.equal(isProjectName(n), false, n);
   assert.equal(isProjectName("Kosh"), true);
+  assert.equal(isProjectName("brand-bakery-2026"), true);
 });
 
 test("alert: unknown status is an error, a blocked one is recorded as skipped", () => {

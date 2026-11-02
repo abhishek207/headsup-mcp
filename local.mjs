@@ -343,6 +343,10 @@ function runSpeak(v, texts, speed = 1, onPart = () => {}) {
   return withSpeakLock(
     () =>
       new Promise((resolve, reject) => {
+        for (const d of readdirSync(LOCAL_DIR).filter((d) => d.startsWith("line-"))) {
+          const p = join(LOCAL_DIR, d); // left by a process that was killed mid-line
+          if (Date.now() - statSync(p).mtimeMs > 600_000) rmSync(p, { recursive: true, force: true });
+        }
         const dir = join(LOCAL_DIR, `line-${process.pid}-${Date.now()}`);
         mkdirSync(dir, { recursive: true });
         const outs = texts.map((_, i) => join(dir, `${i}.wav`));
@@ -376,7 +380,7 @@ function runSpeak(v, texts, speed = 1, onPart = () => {}) {
           rmSync(dir, { recursive: true, force: true });
           reject(new Error(signal ? "the local voice took too long" : `the local voice failed: ${reason(err) || `exit ${code}`}`));
         });
-        p.stdin.end(JSON.stringify({ texts, sid: v.sid, british: v.id.startsWith("b"), file, outs, speed }));
+        p.stdin.end(JSON.stringify({ texts, sid: v.sid, british: v.id.startsWith("b"), file, outs, speed, parent: process.pid }));
       }),
   );
 }
@@ -396,6 +400,7 @@ function speakMain() {
   const tts = sherpa.createOfflineTts({ model: { kokoro, numThreads: THREADS, provider: "cpu", debug: 0 }, maxNumSentences: 1 });
   const speed = Math.min(1.5, Math.max(0.7, Number(job.speed) || 1));
   for (const [i, text] of job.texts.entries()) {
+    if (job.parent && process.ppid !== job.parent) process.exit(1); // nobody left to play it
     const audio = sherpa.offlineTtsGenerate(tts, { text, sid: job.sid, speed });
     if (!audio?.samples?.length) throw new Error("no audio came back");
     sherpa.writeWave(job.outs[i], { samples: audio.samples, sampleRate: audio.sampleRate });
