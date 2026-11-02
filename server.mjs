@@ -34,10 +34,12 @@ const TOOL = {
         type: "string",
         maxLength: 400,
         description:
-          `Optional: your own short line, spoken instead of the status's fixed line when that line doesn't say enough ` +
-          `(e.g. "The migration ran, but two tables need your review."). One or two plain sentences in first person, ` +
-          `at most ${config.live.max_chars} characters; no code, paths, links or secrets, because it's sent to the user's ` +
-          `text-to-speech provider. Still pick the closest status: if the line can't be recorded, the status's line plays instead.`,
+          `Optional: your own line, spoken instead of the status's fixed line when that line doesn't say enough ` +
+          `(e.g. "The migration ran, but two tables need your review. Should I roll back or keep going?"). ` +
+          `Plain sentences in first person, at most ${config.live.max_chars} characters (the user's setting): use that room to say ` +
+          `exactly what you need, such as which review, which decision and its options, or which input. No code, paths, links or ` +
+          `secrets, because it may go to the user's text-to-speech provider. Still pick the closest status: if the line can't be ` +
+          `recorded, the status's line plays instead.`,
       },
       volume: {
         type: "integer",

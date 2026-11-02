@@ -358,6 +358,7 @@
   .val { min-width: 44px; text-align: right; font-weight: 600; }
 
   .note { font-size: 13px; color: var(--ink-2); margin: 10px 4px 0; }
+  #localSpeed { margin-top: 16px; }
   .stack { margin-top: 12px; }
   .lib-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .lib-head .segmented { display: flex; }
@@ -507,14 +508,14 @@
 
     <section>
       <h2>Claude's own words</h2>
-      <p class="lede">When a fixed line doesn't say enough, Claude can speak a short line of its own, like “The migration ran, but two tables need your review.” It's spoken by the local voice or recorded with your key, and the same switches, quiet times and volume caps apply. If it can't be recorded, the regular alert plays instead.</p>
+      <p class="lede">When a fixed line doesn't say enough, Claude can speak a line of its own that says exactly what it needs, like “The migration ran, but two tables need your review. Should I roll back or keep going?” It's spoken by the local voice or recorded with your key, and the same switches, quiet times and volume caps apply. If it can't be recorded, the regular alert plays instead.</p>
       <div class="group">
         <div class="row">
           <div class="text"><div class="title">Let Claude speak its own lines</div><div class="desc" id="liveDesc">Lines are sent to your voice provider, so Claude is told to keep code and secrets out of them.</div></div>
           <div class="controls"><label class="switch"><input type="checkbox" data-k="live.enabled" aria-label="Let Claude speak its own lines"><span></span></label></div>
         </div>
         <div class="row">
-          <div class="text"><div class="title">Longest line</div><div class="desc">Longer lines are cut at a word.</div></div>
+          <div class="text"><div class="title">Longest line</div><div class="desc">Room for Claude to say exactly what it needs. Longer lines are cut at a word. With the local voice a 400-character line takes about 10 seconds to make; with ElevenLabs or Sarvam, longer lines use more credits.</div></div>
           <div class="controls"><input class="field" type="number" min="40" max="400" data-k="live.max_chars" aria-label="Longest line in characters"><span class="unit">characters</span></div>
         </div>
         <div class="row">
@@ -636,6 +637,12 @@
       <p class="lede">Kokoro, a small voice model that runs on your Mac. It speaks Claude's lines, project names and your wording for free, with no key and no daily limit, and nothing you hear is sent anywhere. It's optional: voices from ElevenLabs and Sarvam keep working as before.</p>
       <div class="group" id="localBox"></div>
       <p class="note" id="localNote"></p>
+      <div class="group" id="localSpeed" hidden>
+        <div class="row">
+          <div class="text"><div class="title">Speaking speed</div><div class="desc">How fast the local voice talks, from 0.7× to 1.5×. Lines already made are recorded again at the new speed when they're next needed.</div></div>
+          <div class="controls"><input type="range" min="0.7" max="1.5" step="0.05" data-k="local.speed" aria-label="Local voice speaking speed"><span class="val"></span></div>
+        </div>
+      </div>
     </section>
 
     <section id="keys">
@@ -943,8 +950,13 @@ function render() {
 // before downloading. Shows download progress, what's installed with what it measured on
 // this Mac, and switching to the other model.
 const LOCAL_SOUND = { full: "Clear and natural.", small: "A little rough and buzzy, and about half as fast. A third of the download." };
+const speedLabel = (v) => Number(v).toFixed(2).replace(/0$/, "") + "×";
 function renderLocal() {
   const L = S.local, mb = (n) => Math.round(n / 1e6) + " MB";
+  const speed = $('[data-k="local.speed"]');
+  $("#localSpeed").hidden = !L.ready;
+  speed.nextElementSibling.textContent = speedLabel(speed.value);
+  fill(speed);
   if (!L.supported) {
     $("#localBox").innerHTML = `<div class="row"><div class="text"><div class="title">Not available here</div><div class="desc">The local voice needs macOS on Apple silicon or Intel.</div></div></div>`;
     $("#localNote").textContent = "";
@@ -1083,7 +1095,7 @@ document.addEventListener("change", (e) => {
   save(el.type === "checkbox");
 });
 document.addEventListener("input", (e) => {
-  if (e.target.type === "range") { fill(e.target); e.target.nextElementSibling.textContent = e.target.value + "%"; }
+  if (e.target.type === "range") { fill(e.target); e.target.nextElementSibling.textContent = e.target.dataset.k === "local.speed" ? speedLabel(e.target.value) : e.target.value + "%"; }
   if (e.target.id === "libSearch") renderLibrary();
   if (e.target.id === "wordingText") wordingCount();
   if (e.target.id === "sayText") $("#sayCount").textContent = e.target.value.trim() ? e.target.value.trim().length + " characters" : "";

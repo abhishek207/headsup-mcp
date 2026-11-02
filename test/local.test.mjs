@@ -164,6 +164,23 @@ test("local voice: Claude's lines and project names are free, with no daily budg
     assert.match(paid.note, /daily limit of 20 new project names/, "the cap still holds for paid voices");
   }));
 
+test("local voice speed: clamped to 0.7–1.5 in steps of 0.05, and each speed keeps its own recordings", needsFfmpeg, () =>
+  withTts(async () => {
+    assert.equal(normalize({}).local.speed, 1);
+    assert.equal(normalize({ local: { speed: 1.23 } }).local.speed, 1.25);
+    assert.equal(normalize({ local: { speed: 3 } }).local.speed, 1.5);
+    assert.equal(normalize({ local: { speed: 0.1 } }).local.speed, 0.7);
+    for (const bad of ["fast", null, "", "1.2"]) assert.equal(normalize({ local: { speed: bad } }).local.speed, 1);
+    const at = (speed) => normalize({ ...optedIn, local: { speed }, custom_voices: [{ provider: "local", provider_id: "am_michael" }], voice: "local-am_michael" });
+    const msg = "The speed test is done, and I need you to pick a pace.";
+    const normal = await prepare("local-am_michael", "input", { message: msg }, at(1));
+    const quick = await prepare("local-am_michael", "input", { message: msg }, at(1.2));
+    assert.equal(quick.live, true);
+    assert.notEqual(quick.file, normal.file);
+    assert.match(quick.file, /-x1\.2\.mp3$/);
+    assert.equal((await prepare("local-am_michael", "input", { message: msg }, at(1))).file, normal.file, "back at 1x, the first recording is reused");
+  }));
+
 test("local voices are listed for the library, with previews once downloaded", async () => {
   const { providerVoices } = await import("../tts.mjs");
   const list = await providerVoices("local");

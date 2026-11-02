@@ -88,22 +88,29 @@ export function usageSummary() {
   return { today: sum([day()]), month: sum(Object.keys(days).filter((k) => k.startsWith(month))), by: days[day()]?.by ?? {} };
 }
 
-const keyOf = (id, text, fast) => segKey(id, text) + (fast ? "-fast" : "");
+// Cache key of a segment. Lines in the local voice at another speed are kept apart.
+const keyOf = (id, text, fast, speed = 1) => segKey(id, text) + (fast ? "-fast" : "") + (speed !== 1 ? `-x${speed}` : "");
+// The speed a voice speaks at: the local voice's setting, 1 for everything else.
+const speedOf = (voice, c) => (voiceInfo(voice, c)?.provider === "local" ? (c.local?.speed ?? 1) : 1);
 
 // Characters a recording would cost: the parts not already cached or cut from a built-in track.
 export function costOf(voice, parts) {
   const dir = join(SEGMENTS, voice);
   return parts
-    .filter((p) => !(p.track && existsSync(p.track)) && !cachedSegment(dir, keyOf(p.id, p.text, p.fast)))
+    .filter((p) => !(p.track && existsSync(p.track)) && !cachedSegment(dir, keyOf(p.id, p.text, p.fast, p.speed)))
     .reduce((n, p) => n + p.text.length, 0);
 }
 
-const clipPath = (voice, o) => join(CLIPS, voice, segKey(o.greetId, o.greet), `${keyOf(o.msgId, o.text, o.fast)}.mp3`);
-export const composed = (voice, o) => (existsSync(clipPath(voice, o)) ? clipPath(voice, o) : null);
+const clipPath = (voice, o) => join(CLIPS, voice, keyOf(o.greetId, o.greet, false, o.speed), `${keyOf(o.msgId, o.text, o.fast, o.speed)}.mp3`);
+// The clip if it's already made (c: config, for the local voice's speed).
+export function composed(voice, o, c) {
+  const out = clipPath(voice, c ? { ...o, speed: speedOf(voice, c) } : o);
+  return existsSync(out) ? out : null;
+}
 
-async function segment(voice, info, { id, text, track, part, fast }, kind) {
+async function segment(voice, info, { id, text, track, part, fast, speed }, kind) {
   const dir = join(SEGMENTS, voice);
-  const key = keyOf(id, text, fast);
+  const key = keyOf(id, text, fast, speed);
   const hit = cachedSegment(dir, key);
   if (hit) return hit;
   mkdirSync(dir, { recursive: true });
@@ -112,7 +119,7 @@ async function segment(voice, info, { id, text, track, part, fast }, kind) {
     (part === "greeting" ? extractGreeting : extractMessage)(track, out);
     return out;
   }
-  const { data, ext } = await synth(info, text, { fast });
+  const { data, ext } = await synth(info, text, { fast, speed });
   if (info.provider !== "local") spend(info.provider, text.length, kind); // the local voice is free
   const out = join(dir, `${key}.${ext}`);
   writeFileSync(out, data);
@@ -124,13 +131,14 @@ async function segment(voice, info, { id, text, track, part, fast }, kind) {
 // provider (leave out for things the user asked for on the page; the local voice has none).
 // Throws Skip when it can't record without breaking a limit, or the provider's error.
 export async function compose(voice, c, o) {
-  const out = clipPath(voice, o);
+  const speed = speedOf(voice, c);
+  const out = clipPath(voice, { ...o, speed });
   if (existsSync(out)) return out;
   const info = voiceInfo(voice, c);
   if (!info) throw new Skip(`unknown voice ${voice}`);
   const parts = [
-    { id: o.greetId, text: o.greet, track: o.greetTrack, part: "greeting" },
-    { id: o.msgId, text: o.text, track: o.msgTrack, part: "message", fast: o.fast },
+    { id: o.greetId, text: o.greet, track: o.greetTrack, part: "greeting", speed },
+    { id: o.msgId, text: o.text, track: o.msgTrack, part: "message", fast: o.fast, speed },
   ];
   const cost = costOf(voice, parts);
   if (cost) {

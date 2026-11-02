@@ -313,16 +313,16 @@ const reason = (stderr) => {
 
 // Speaks text in a local voice and returns the WAV. Throws if the voice isn't installed,
 // the engine fails, or it takes longer than 30 seconds.
-export async function speakLocal(voiceId, text) {
+export async function speakLocal(voiceId, text, speed = 1) {
   const v = LOCAL_VOICES.find((x) => x.id === voiceId);
   if (!v) throw new Error(`unknown local voice ${voiceId}`);
   if (!localReady()) throw new Error("the local voice isn't downloaded");
-  return (await runSpeak(v, text)).wav;
+  return (await runSpeak(v, text, speed)).wav;
 }
 
 // One line in a fresh child process: { wav, stats: { memory (peak MB), seconds (start to
 // finish, model load included: what an alert waits for) } }.
-function runSpeak(v, text) {
+function runSpeak(v, text, speed = 1) {
   const file = MODELS[installedModel()]?.file;
   return withSpeakLock(
     () =>
@@ -349,7 +349,7 @@ function runSpeak(v, text) {
             rmSync(out, { force: true });
           }
         });
-        p.stdin.end(JSON.stringify({ text, sid: v.sid, british: v.id.startsWith("b"), file, out }));
+        p.stdin.end(JSON.stringify({ text, sid: v.sid, british: v.id.startsWith("b"), file, out, speed }));
       }),
   );
 }
@@ -367,7 +367,7 @@ function speakMain() {
     lang: job.british ? "en" : "en-us", // espeak-ng's "en" is British English
   };
   const tts = sherpa.createOfflineTts({ model: { kokoro, numThreads: THREADS, provider: "cpu", debug: 0 }, maxNumSentences: 1 });
-  const audio = sherpa.offlineTtsGenerate(tts, { text: job.text, sid: job.sid, speed: 1 });
+  const audio = sherpa.offlineTtsGenerate(tts, { text: job.text, sid: job.sid, speed: Math.min(1.5, Math.max(0.7, Number(job.speed) || 1)) });
   if (!audio?.samples?.length) throw new Error("no audio came back");
   sherpa.writeWave(job.out, { samples: audio.samples, sampleRate: audio.sampleRate });
   // Peak memory of this process, for the settings page (maxRSS is in kilobytes).

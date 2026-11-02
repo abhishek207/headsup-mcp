@@ -182,7 +182,7 @@ const server = createServer(async (req, res) => {
       if (!listVoices(c).includes(voice) || !TEMPLATES.some((t) => t.id === id)) return json(404, { error: "unknown clip" });
       // The recorded version if the wording or voice isn't built in, else the built-in track.
       const text = textFor(id, c);
-      const own = composed(voice, { greet: GREETING, greetId: "greeting", text, msgId: id });
+      const own = composed(voice, { greet: GREETING, greetId: "greeting", text, msgId: id }, c);
       const builtIn = text === TEMPLATES.find((t) => t.id === id).text && findClip(voice, id);
       const file = own ?? builtIn ?? clipFor(voiceInfo(voice, c)?.fallback ?? voice, id);
       if (!file) return json(404, { error: "missing clip" });
@@ -305,11 +305,13 @@ const server = createServer(async (req, res) => {
       if (!v) return json(404, { error: "unknown voice" });
       const text = `Hello, I'm ${v.name}. I'll let you know when Claude needs you.`;
       const dir = join(LOCAL_DIR, "previews");
-      let file = cachedSegment(dir, segKey(v.id, text));
+      const speed = loadConfig().local.speed; // previews follow the speed setting
+      const key = segKey(v.id, text) + (speed !== 1 ? `-x${speed}` : "");
+      let file = cachedSegment(dir, key);
       if (!file) {
-        const { data } = await synth({ provider: "local", provider_id: v.id }, text);
+        const { data } = await synth({ provider: "local", provider_id: v.id }, text, { speed });
         mkdirSync(dir, { recursive: true });
-        writeFileSync((file = join(dir, `${segKey(v.id, text)}.wav`)), data);
+        writeFileSync((file = join(dir, `${key}.wav`)), data);
       }
       res.writeHead(200, { "content-type": "audio/wav", "cache-control": "no-store" });
       return createReadStream(file).pipe(res);

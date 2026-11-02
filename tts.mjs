@@ -108,7 +108,7 @@ export const PROVIDER_NAMES = { elevenlabs: "ElevenLabs", sarvam: "Sarvam", loca
 export async function synth(voice, text, opts = {}) {
   const v = typeof voice === "string" ? VOICES[voice] : voice;
   if (!v || !VOICE_PROVIDERS.includes(v.provider)) throw new Error(`unknown voice ${typeof voice === "string" ? voice : v?.provider_id}`);
-  if (v.provider === "local") return { data: fake() ? tone(0.2 + text.length / 40) : await speakLocal(v.provider_id, text), ext: "wav" };
+  if (v.provider === "local") return { data: fake() ? tone(0.2 + text.length / 40) : await speakLocal(v.provider_id, text, opts.speed), ext: "wav" };
   const key = getKey(v.provider);
   if (!key) throw new Error(`no ${PROVIDER_NAMES[v.provider]} key`);
   if (fake()) return { data: tone(0.2 + text.length / 40), ext: "wav" };

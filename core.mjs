@@ -61,6 +61,8 @@ export const DEFAULTS = {
   // Claude's own lines (notify_user's message), spoken with the user's key or the local voice. Opt-in, like project names.
   // daily_chars caps everything recorded automatically per paid provider per day (0 = nothing new).
   live: { enabled: false, max_chars: 160, daily_chars: 1000, fast: false },
+  // The local voice's speaking speed (1 = normal).
+  local: { speed: 1 },
 };
 
 const LIMITS = { wording_chars: 120, custom_voices: 30 };
@@ -164,6 +166,10 @@ export function normalize(c = {}) {
       max_chars: clamp(c.live?.max_chars, 40, 400, d.live.max_chars),
       daily_chars: clamp(c.live?.daily_chars, 0, 20000, d.live.daily_chars),
       fast: c.live?.fast === true,
+    },
+    local: {
+      // 0.7 to 1.5 in steps of 0.05
+      speed: Number.isFinite(c.local?.speed) ? Math.min(1.5, Math.max(0.7, Math.round(c.local.speed * 20) / 20)) : d.local.speed,
     },
   };
 }

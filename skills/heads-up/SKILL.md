@@ -42,12 +42,13 @@ Use `repeat: 2` only when it's urgent. Leave `volume` out; it's handled within t
 
 ## Saying what you need with `message`
 
-The user may have several sessions running at once, and "I need your review" alone doesn't tell them which one to open. Pass `message` on every call: your own short line, spoken instead of the status's line, that names the thread or task and exactly what you need (which review, which decision and its options, which input).
+The user may have several sessions running at once, and "I need your review" alone doesn't tell them which one to open. Pass `message` on every call: your own line, spoken instead of the status's line, that names the thread or task and exactly what you need (which review and of what, which decision and its options, which input).
 
-- One or two plain sentences, first person: "The pricing page task is done. I need you to pick hero image A or B." or "In the webhooks thread, I need to know whether refunds can wait a day."
+- Plain sentences, first person: "The pricing page task is done. I need you to pick hero image A or B." or "In the webhooks thread, I need to know whether refunds can wait a day. If they can, I'll batch them overnight."
+- Say enough that the user knows what to do before they reach the screen. The tool's description gives the longest line the user allows; use that room when the detail helps, and stay brief when it doesn't.
 - Name the thread or session by its title, or the task in a few words the user would recognise.
 - Don't repeat the project name: with spoken project names on, the greeting already says it ("Hello from Kosh.").
-- Keep it under about 120 characters; longer lines are cut at 160.
+- Lines over the user's limit are cut at a word, so put the ask first.
 - No names, code, file paths, ids, links, numbers that need reading, or anything secret. The text may go to the user's text-to-speech provider.
 - Still set the closest `status`. Spoken lines are an opt-in feature that needs the free local voice or the user's own ElevenLabs or Sarvam key; when they're off, or the day's budget is used up, the status's built-in line plays instead.
 
