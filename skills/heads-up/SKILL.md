@@ -47,7 +47,8 @@ The user may have several sessions running at once, and "I need your review" alo
 - Plain sentences, first person: "The pricing page task is done. I need you to pick hero image A or B." or "In the webhooks thread, I need to know whether refunds can wait a day. If they can, I'll batch them overnight."
 - Say enough that the user knows what to do before they reach the screen. The tool's description gives the longest line the user allows; use that room when the detail helps, and stay brief when it doesn't.
 - Name the thread or session by its title, or the task in a few words the user would recognise.
-- Don't repeat the project name: with spoken project names on, the greeting already says it ("Hello from Kosh.").
+- Don't repeat the project name: with spoken project names on, the greeting already says it ("Hello from <project>."), taken from the folder you worked in.
+- If you worked in a different folder from the one the session started in (you changed into another repo, or the session runs in a parent folder like ~/Dev), pass that folder's absolute path as `folder` so the greeting names the right project. Never reuse a project name from an earlier alert or another session.
 - Lines over the user's limit are cut at a word, so put the ask first.
 - No names, code, file paths, ids, links, numbers that need reading, or anything secret. The text may go to the user's text-to-speech provider.
 - Still set the closest `status`. Spoken lines are an opt-in feature that needs the free local voice or the user's own ElevenLabs or Sarvam key; when they're off, or the day's budget is used up, the status's built-in line plays instead.

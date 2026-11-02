@@ -5,7 +5,8 @@
 // local voice or the user's ElevenLabs or Sarvam key. Guardrails and settings live in core.mjs and
 // config.json; run `headsup` for the settings page.
 
-import { resolve, sep } from "node:path";
+import { statSync } from "node:fs";
+import { isAbsolute, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, projectFor, textFor } from "./core.mjs";
 
@@ -41,6 +42,14 @@ const TOOL = {
           `secrets, because it may go to the user's text-to-speech provider. Still pick the closest status: if the line can't be ` +
           `recorded, the status's line plays instead.`,
       },
+      folder: {
+        type: "string",
+        maxLength: 1000,
+        description:
+          "The absolute path of the folder this work happened in. Pass it whenever that isn't the folder the session started in " +
+          "(you changed into another repo, or work in a subfolder of a parent like ~/Dev), so the greeting names the right project. " +
+          "It's only used to look up the project's name.",
+      },
       volume: {
         type: "integer",
         minimum: 0,
@@ -60,9 +69,20 @@ const projectDir = () => {
   return dir === ROOT || dir.startsWith(ROOT + sep) ? null : dir;
 };
 
+// The folder the agent says it worked in, if it's a real one; else where the session started.
+const workDir = (folder) => {
+  if (typeof folder !== "string" || !isAbsolute(folder)) return projectDir();
+  try {
+    const dir = resolve(folder);
+    return statSync(dir).isDirectory() && dir !== ROOT && !dir.startsWith(ROOT + sep) ? dir : projectDir();
+  } catch {
+    return projectDir();
+  }
+};
+
 async function callTool(args = {}) {
   const message = typeof args.message === "string" && args.message.trim() ? args.message : null;
-  const r = alert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(projectDir()), message });
+  const r = alert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(workDir(args.folder)), message });
   if (!r.ok) return { isError: true, content: [{ type: "text", text: r.error }] };
   if (!r.played) return { content: [{ type: "text", text: `Not played: ${r.reason}. This is the user's setting; don't retry.` }] };
   if (!message) return { content: [{ type: "text", text: `Playing "${r.line}"` }] };
