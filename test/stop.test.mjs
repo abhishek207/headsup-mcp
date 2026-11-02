@@ -12,6 +12,17 @@ writeFileSync(join(bin, "afplay"), "#!/bin/sh\nexec sleep 20\n");
 chmodSync(join(bin, "afplay"), 0o755);
 process.env.PATH = `${bin}:${process.env.PATH}`;
 
+// A stand-in call detector, in place before core picks its helper (a real one built into the
+// checkout's bin/ would otherwise win): no mic for its first answer, then the mic comes on.
+const helperDir = join(DATA, "bin");
+mkdirSync(helperDir, { recursive: true });
+const count = join(DATA, "polls");
+writeFileSync(
+  join(helperDir, "media-in-use"),
+  `#!/bin/sh\nn=$(cat "${count}" 2>/dev/null || echo 0); echo $((n+1)) > "${count}"\nif [ "$n" -lt 1 ]; then echo '{"mic":false,"camera":false}'; else echo '{"mic":true,"camera":false}'; fi\n`,
+);
+chmodSync(join(helperDir, "media-in-use"), 0o755);
+
 const { alert, stopPlaying, loadHistory, saveConfig, normalize } = await import("../core.mjs");
 const base = { ...quiet, chime: false, volume: { auto: false } };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -43,15 +54,6 @@ test("an alert called after Stop still plays", async () => {
 });
 
 test("the mic opening mid-alert stops it", async () => {
-  // The call detector says no mic for its first answer, then the mic comes on.
-  const helperDir = join(DATA, "bin");
-  mkdirSync(helperDir, { recursive: true });
-  const count = join(DATA, "polls");
-  writeFileSync(
-    join(helperDir, "media-in-use"),
-    `#!/bin/sh\nn=$(cat "${count}" 2>/dev/null || echo 0); echo $((n+1)) > "${count}"\nif [ "$n" -lt 1 ]; then echo '{"mic":false,"camera":false}'; else echo '{"mic":true,"camera":false}'; fi\n`,
-  );
-  chmodSync(join(helperDir, "media-in-use"), 0o755);
   saveConfig(normalize({ ...base, cooldown_seconds: 0, calls: { mic: true, camera: true, focus: false } }));
   const t0 = Date.now();
   const r = alert("completed", { source: "test" });
