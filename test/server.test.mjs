@@ -1,7 +1,7 @@
 import { DATA } from "./helpers.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -112,4 +112,11 @@ test("MCP server: the folder argument names the project the work happened in", (
   assert.equal(call({}), "kosh");
   assert.equal(call({ folder: worked }), "brand-bakery-hub");
   for (const bad of ["brand-bakery-hub", join(DATA, "missing"), dirname(SERVER), 42]) assert.equal(call({ folder: bad }), "kosh", `ignored: ${bad}`);
+});
+
+test("package: every root module ships, and the dev tools don't", () => {
+  const pkg = json("package.json");
+  const root = new URL("..", import.meta.url);
+  for (const f of readdirSync(root).filter((f) => f.endsWith(".mjs"))) assert.ok(pkg.files.includes(f), `${f} is missing from files`);
+  assert.ok(!pkg.files.some((f) => f.includes("*")), "no globs: they also match tools/ and test/");
 });
