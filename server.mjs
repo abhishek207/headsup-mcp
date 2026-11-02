@@ -8,9 +8,11 @@
 import { statSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
-import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, projectFor, textFor } from "./core.mjs";
+import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, maxChars, projectFor, textFor } from "./core.mjs";
+import { voiceInfo } from "./speech.mjs";
 
 const config = loadConfig();
+const LOCAL = voiceInfo(config.voice, config)?.provider === "local"; // free, so Claude can say as much as it needs
 const PREPARE_WAIT_MS = 15_000; // how long the tool waits for a live line to be recorded
 
 const TOOL = {
@@ -33,12 +35,14 @@ const TOOL = {
       },
       message: {
         type: "string",
-        maxLength: 400,
+        maxLength: 2000,
         description:
           `Optional: your own line, spoken instead of the status's fixed line when that line doesn't say enough ` +
           `(e.g. "The migration ran, but two tables need your review. Should I roll back or keep going?"). ` +
-          `Plain sentences in first person, at most ${config.live.max_chars} characters (the user's setting): use that room to say ` +
-          `exactly what you need, such as which review, which decision and its options, or which input. No code, paths, links or ` +
+          `Plain sentences in first person, at most ${maxChars(config.voice, config)} characters (the user's setting): use that room to say ` +
+          `exactly what you need, such as which review, which decision and its options, or which input. ` +
+          (LOCAL ? `The user's voice runs on their Mac at no cost, so write the full script you want them to hear; it starts playing a few seconds after it's ready. ` : "") +
+          `No code, paths, links or ` +
           `secrets, because it may go to the user's text-to-speech provider. Still pick the closest status: if the line can't be ` +
           `recorded, the status's line plays instead.`,
       },

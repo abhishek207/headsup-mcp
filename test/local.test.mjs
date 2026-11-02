@@ -181,6 +181,14 @@ test("local voice speed: clamped to 0.7–1.5 in steps of 0.05, and each speed k
     assert.equal((await prepare("local-am_michael", "input", { message: msg }, at(1))).file, normal.file, "back at 1x, the first recording is reused");
   }));
 
+test("local voice: Claude can say much more than with a paid voice", () => {
+  const c = normalize({ ...quiet, live: { enabled: true, max_chars: 160 }, custom_voices: [{ provider: "local", provider_id: "am_michael" }], voice: "local-am_michael" });
+  assert.equal(c.local.max_chars, 1000);
+  assert.equal(normalize({ local: { max_chars: 99999 } }).local.max_chars, 2000);
+  assert.equal(core.maxChars("local-am_michael", c), 1000);
+  assert.equal(core.maxChars("american-male", c), 160);
+});
+
 test("local voices are listed for the library, with previews once downloaded", async () => {
   const { providerVoices } = await import("../tts.mjs");
   const list = await providerVoices("local");

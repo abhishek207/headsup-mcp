@@ -23,7 +23,10 @@ const INSTALLED = join(LOCAL_DIR, "installed.json");
 const INSTALL_LOCK = join(LOCAL_DIR, "installing.lock");
 const SPEAK_LOCK = join(LOCAL_DIR, "speaking.lock");
 const THREADS = 2; // short bursts on two cores, so the rest of the Mac stays responsive
-const SPEAK_TIMEOUT_MS = 30_000;
+// A line gets 30 s plus 0.15 s per character (a 2,000-character script: about 5 minutes,
+// several times what the smaller model needs), and the next one waits up to 3 minutes for it.
+const speakTimeout = (text) => 30_000 + 150 * text.length;
+const SPEAK_WAIT_MS = 180_000;
 
 // sherpa-onnx 1.13.8 is the last release with espeak-ng. 2.x reads words only from its
 // lexicon and drops the rest, which would cut project names and much of Claude's lines.
@@ -284,7 +287,7 @@ export function removeLocal() {
 // One line at a time across all sessions: eight sessions finishing together make eight
 // lines in a row, never eight models in memory at once.
 async function withSpeakLock(fn) {
-  const deadline = Date.now() + SPEAK_TIMEOUT_MS;
+  const deadline = Date.now() + SPEAK_WAIT_MS;
   for (;;) {
     try {
       writeFileSync(SPEAK_LOCK, JSON.stringify({ pid: process.pid }), { flag: "wx" });
@@ -335,7 +338,7 @@ function runSpeak(v, text, speed = 1) {
         let said = "";
         p.stdout.on("data", (d) => (said = (said + d).slice(-500)));
         p.stderr.on("data", (d) => (err = (err + d).slice(-2000)));
-        const timer = setTimeout(() => p.kill("SIGKILL"), SPEAK_TIMEOUT_MS);
+        const timer = setTimeout(() => p.kill("SIGKILL"), speakTimeout(text));
         p.on("error", (e) => (clearTimeout(timer), reject(e)));
         p.on("close", (code, signal) => {
           clearTimeout(timer);

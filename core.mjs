@@ -61,8 +61,9 @@ export const DEFAULTS = {
   // Claude's own lines (notify_user's message), spoken with the user's key or the local voice. Opt-in, like project names.
   // daily_chars caps everything recorded automatically per paid provider per day (0 = nothing new).
   live: { enabled: false, max_chars: 160, daily_chars: 1000, fast: false },
-  // The local voice's speaking speed (1 = normal).
-  local: { speed: 1 },
+  // The local voice: speaking speed (1 = normal), and the longest line Claude may say with it.
+  // It's free, so the limit is only a guard against runaway text; live.max_chars is for paid voices.
+  local: { speed: 1, max_chars: 1000 },
 };
 
 const LIMITS = { wording_chars: 120, custom_voices: 30 };
@@ -170,6 +171,7 @@ export function normalize(c = {}) {
     local: {
       // 0.7 to 1.5 in steps of 0.05
       speed: Number.isFinite(c.local?.speed) ? Math.min(1.5, Math.max(0.7, Math.round(c.local.speed * 20) / 20)) : d.local.speed,
+      max_chars: clamp(c.local?.max_chars, 40, 2000, d.local.max_chars),
     },
   };
 }
@@ -417,7 +419,7 @@ async function takeOverStaleLock() {
   if (held?.before) await setVolume(held.before.vol, held.before.muted).catch(() => {});
 }
 
-export async function withPlayLock(fn, { waitMs = 30_000 } = {}) {
+export async function withPlayLock(fn, { waitMs = 180_000 } = {}) { // long enough to wait out a long local line
   const deadline = Date.now() + waitMs;
   for (;;) {
     try {
@@ -599,12 +601,15 @@ let queue = Promise.resolve();
 // project: name to announce ("Hello from <project>."); message: Claude's own words to say
 // instead of the alert's line (falls back to the line); meta: extra log fields.
 // Returns at once; prepared resolves to what will actually play ({ line, live, note }).
+// The longest line Claude may say in a voice: the local voice's own limit, else the paid one.
+export const maxChars = (voice, c) => (voiceInfo(voice, c)?.provider === "local" ? c.local.max_chars : c.live.max_chars);
+
 export function alert(status, { repeat = 1, volume, force = false, source = "claude", voice, project = null, message = null, meta = {} } = {}) {
   if (!(status in STATUSES)) return { ok: false, error: `Unknown status "${status}". Use one of: ${Object.keys(STATUSES).join(", ")}.` };
   const c = loadConfig();
   const useVoice = voice && listVoices(c).includes(voice) ? voice : c.voice;
   if (!clipFor(voiceInfo(useVoice, c)?.fallback ?? useVoice, status)) return { ok: false, error: `Voice "${useVoice}" has no clip for "${status}".` };
-  const said = message ? cleanMessage(message, c.live.max_chars) || null : null;
+  const said = message ? cleanMessage(message, maxChars(useVoice, c)) || null : null;
   const reason = force ? null : blockedReason(status, c);
   record({ status, source, ...(project && { project }), ...(said && { message: said }), ...meta, result: reason ? "skipped" : "played", ...(reason && { reason }) });
   if (reason) return { ok: true, played: false, reason };

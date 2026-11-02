@@ -45,7 +45,7 @@ Use `repeat: 2` only when it's urgent. Leave `volume` out; it's handled within t
 The user may have several sessions running at once, and "I need your review" alone doesn't tell them which one to open. Pass `message` on every call: your own line, spoken instead of the status's line, that names the thread or task and exactly what you need (which review and of what, which decision and its options, which input).
 
 - Plain sentences, first person: "The pricing page task is done. I need you to pick hero image A or B." or "In the webhooks thread, I need to know whether refunds can wait a day. If they can, I'll batch them overnight."
-- Say enough that the user knows what to do before they reach the screen. The tool's description gives the longest line the user allows; use that room when the detail helps, and stay brief when it doesn't.
+- Say enough that the user knows what to do before they reach the screen. The tool's description gives the longest line the user allows. With the free local voice that limit is high: write the full script you want them to hear (what happened, what you need, the options and your recommendation). With a paid voice, every character costs the user credits, so stay brief.
 - Name the thread or session by its title, or the task in a few words the user would recognise.
 - Don't repeat the project name: with spoken project names on, the greeting already says it ("Hello from <project>."), taken from the folder you worked in.
 - If you worked in a different folder from the one the session started in (you changed into another repo, or the session runs in a parent folder like ~/Dev), pass that folder's absolute path as `folder` so the greeting names the right project. Never reuse a project name from an earlier alert or another session.
