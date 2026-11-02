@@ -603,6 +603,55 @@ const GENERIC_DIRS = /^(scratch|scratchpad|tmp|temp|downloads|desktop|documents|
 const ACRONYMS = new Set(["ai", "api", "ui", "ux", "ocr", "mcp", "cli", "sdk", "db", "ios", "css", "html", "seo", "llm", "pdf", "crm", "cms"]);
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
+// The title of the chat an alert comes from, as the user sees it, so they can find the
+// one that needs them. The Claude app keeps one file per Code session, named by the
+// CLAUDE_CODE_HOST_SESSION_ID it gives the session's processes; plain Claude Code keeps
+// a /rename title in the session's transcript. A file whose cliSessionId isn't this
+// session (a `claude -p` run started inside another session) doesn't count. Null if unknown
+// or generic ("Remote Control session (from a project)").
+const GENERIC_TITLE = /\(from a project\)$|^(new|untitled)( (session|chat|thread))?$/i;
+const tidyTitle = (t) => {
+  const s = typeof t === "string" ? t.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+  return s && !GENERIC_TITLE.test(s) ? s : null;
+};
+export function sessionTitle(env = process.env, sessionId = env.CLAUDE_CODE_SESSION_ID, home = homedir()) {
+  const id = /^[\w-]{8,80}$/;
+  try {
+    const host = env.CLAUDE_CODE_HOST_SESSION_ID;
+    if (host && id.test(host)) {
+      const base = join(home, "Library", "Application Support", "Claude", "claude-code-sessions");
+      const [acct, org] = [env.CLAUDE_CODE_ACCOUNT_UUID, env.CLAUDE_CODE_ORGANIZATION_UUID];
+      const dirs = acct && org && id.test(acct) && id.test(org) && existsSync(join(base, acct, org))
+        ? [join(base, acct, org)]
+        : readdirSync(base).flatMap((a) => readdirSync(join(base, a)).map((o) => join(base, a, o)));
+      for (const d of dirs) {
+        const file = [`${host}.json`, `local_${host}.json`].map((f) => join(d, f)).find((f) => existsSync(f));
+        const s = file && readJson(file, null);
+        if (s && (!sessionId || !s.cliSessionId || s.cliSessionId === sessionId)) return tidyTitle(s.title);
+      }
+    }
+    if (sessionId && id.test(sessionId)) {
+      const projects = join(env.CLAUDE_CONFIG_DIR || join(home, ".claude"), "projects");
+      for (const d of readdirSync(projects)) {
+        const f = join(projects, d, `${sessionId}.jsonl`);
+        const size = statSync(f, { throwIfNoEntry: false })?.size;
+        if (!size || size > 50_000_000) continue;
+        let title = null;
+        for (const line of readFileSync(f, "utf8").split("\n")) {
+          if (!line.includes('"custom-title"')) continue;
+          try {
+            title = JSON.parse(line).customTitle ?? title;
+          } catch {}
+        }
+        return tidyTitle(title);
+      }
+    }
+  } catch {
+    // no title is fine; the alert still names the project
+  }
+  return null;
+}
+
 // Project for a working directory: the git repo's name (worktrees resolve to their
 // main repo), else the folder name. Null for home, temp and scratch folders.
 export function projectFor(cwd) {
@@ -750,14 +799,19 @@ let queue = Promise.resolve();
 // The longest line Claude may say in a voice: the local voice's own limit, else the paid one.
 export const maxChars = (voice, c) => (voiceInfo(voice, c)?.provider === "local" ? c.local.max_chars : c.live.max_chars);
 
-export function alert(status, { repeat = 1, volume, force = false, source = "claude", voice, project = null, message = null, meta = {} } = {}) {
+export function alert(status, { repeat = 1, volume, force = false, source = "claude", voice, project = null, title = null, message = null, meta = {} } = {}) {
   if (!(status in STATUSES)) return { ok: false, error: `Unknown status "${status}". Use one of: ${Object.keys(STATUSES).join(", ")}.` };
   const c = loadConfig();
   const useVoice = voice && listVoices(c).includes(voice) ? voice : c.voice;
   if (!clipFor(voiceInfo(useVoice, c)?.fallback ?? useVoice, status)) return { ok: false, error: `Voice "${useVoice}" has no clip for "${status}".` };
-  const said = message ? cleanMessage(message, maxChars(useVoice, c)) || null : null;
+  // The chat's title goes first, so the user knows which one needs them: always with the
+  // free local voice, and with a paid one only when a line is being recorded anyway.
+  const thread = typeof title === "string" ? title.trim() : "";
+  const titled = thread && !(message ?? "").toLowerCase().includes(thread.toLowerCase()) && (message || voiceInfo(useVoice, c)?.provider === "local");
+  const text = titled ? `Thread: ${thread}. ${message ?? textFor(status, c)}` : message;
+  const said = text ? cleanMessage(text, maxChars(useVoice, c)) || null : null;
   const reason = force ? null : blockedReason(status, c);
-  record({ status, source, ...(project && { project }), ...(said && { message: said }), ...meta, result: reason ? "skipped" : "played", ...(reason && { reason }) });
+  record({ status, source, ...(project && { project }), ...(thread && { thread }), ...(said && { message: said }), ...meta, result: reason ? "skipped" : "played", ...(reason && { reason }) });
   if (reason) return { ok: true, played: false, reason };
   const vol = Number.isFinite(volume) ? Math.min(100, Math.max(0, volume)) : undefined;
   const times = clamp(repeat, 1, 3, 1);

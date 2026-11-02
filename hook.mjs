@@ -12,7 +12,7 @@ import { spawn } from "node:child_process";
 import { appendFileSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DATA, alert, loadConfig, loadHistory, projectFor } from "./core.mjs";
+import { DATA, alert, loadConfig, loadHistory, projectFor, sessionTitle } from "./core.mjs";
 
 const TURNS = join(DATA, "turns.json");
 const LOG = join(DATA, "hook.log");
@@ -32,8 +32,8 @@ function log(msg) {
 
 // Detached child: run the guardrails, log, play, then exit.
 if (process.argv[2] === "--play") {
-  const [, , , id, source, project] = process.argv;
-  const r = alert(id, { source, project: project || null, meta: { entrypoint } });
+  const [, , , id, source, project, title] = process.argv;
+  const r = alert(id, { source, project: project || null, title: title || null, meta: { entrypoint } });
   if (r.done) await r.done;
   process.exit(0);
 }
@@ -72,7 +72,7 @@ function writeTurns(turns) {
 }
 
 function play(id) {
-  spawn(process.execPath, [fileURLToPath(import.meta.url), "--play", id, `hook:${event}`, projectFor(input.cwd) ?? ""], {
+  spawn(process.execPath, [fileURLToPath(import.meta.url), "--play", id, `hook:${event}`, projectFor(input.cwd) ?? "", sessionTitle(process.env, input.session_id ?? process.env.CLAUDE_CODE_SESSION_ID) ?? ""], {
     detached: true,
     stdio: "ignore",
     env: process.env,

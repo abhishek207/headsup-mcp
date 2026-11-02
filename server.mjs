@@ -10,7 +10,7 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, maxChars, projectFor, textFor } from "./core.mjs";
+import { ROOT, STATUSES, TEMPLATES, alert, detectorProblems, loadConfig, maxChars, projectFor, sessionTitle, textFor } from "./core.mjs";
 import { voiceInfo } from "./speech.mjs";
 
 const config = loadConfig();
@@ -133,7 +133,7 @@ async function worker() {
 
 async function callTool(args = {}) {
   const message = typeof args.message === "string" && args.message.trim() ? args.message : null;
-  const w = runAlert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(workDir(args.folder)), message });
+  const w = runAlert(args.status, { repeat: Number(args.repeat) || 1, volume: args.volume, project: projectFor(workDir(args.folder)), title: sessionTitle(), message });
   const r = (await w.first) ?? { ok: false, error: "the alert stopped before it started" };
   if (!r.ok) return { isError: true, content: [{ type: "text", text: r.error }] };
   if (!r.played) return { content: [{ type: "text", text: `Not played: ${r.reason}. This is the user's setting; don't retry.` }] };
