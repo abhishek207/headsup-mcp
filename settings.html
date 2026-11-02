@@ -476,7 +476,7 @@
 
     <section>
       <h2>Alerts</h2>
-      <p class="lede">Each one starts with "Hello." Turn off the ones you don't want to hear, or change the words: your version is recorded in your voice with your own key.</p>
+      <p class="lede">Each one starts with "Hello." Turn off the ones you don't want to hear, or change the words: your version is recorded in your voice, with the local voice or your own key.</p>
       <div id="alerts"></div>
     </section>
 
@@ -947,11 +947,11 @@ function renderLocal() {
     desc = { engine: "Getting the engine, " + pct + "%", model: "Getting the voice model, " + pct + "% of " + mb(L.download), unpacking: "Unpacking…", checking: "Checking that it speaks…", elsewhere: "Downloading from another window…" }[L.installing.step];
     controls = '<button class="btn" disabled>Downloading…</button>';
   } else if (L.ready) {
-    [title, desc] = ["Ready on this Mac", L.voices + " voices, about " + mb(L.disk) + " on disk. A new line takes a moment to make; repeated lines play from the cache."];
+    [title, desc] = ["Ready on this Mac", L.voices + " voices, about " + mb(L.disk) + " on disk. A new line takes a few seconds to make; repeated lines play from the cache."];
     controls = '<button class="btn" data-local-pick>Choose a voice</button><button class="btn" data-local-remove>Remove</button>';
   } else {
     title = "Download the local voice";
-    desc = (L.error ? "The last download stopped: " + L.error + ". " : "") + "A " + mb(L.download) + " download, about " + mb(L.disk) + " on disk. Then it's free to use as much as you like.";
+    desc = (L.error ? "The last download stopped: " + L.error + ". " : "") + "A " + mb(L.download) + " download, about " + mb(L.disk) + " on disk. Then it's free to use as much as you like. Making a new line takes a few seconds and about 500 MB of memory, freed right after.";
     controls = `<button class="btn primary" data-local-install>${L.error ? "Try again" : "Download"}</button>`;
   }
   $("#localBox").innerHTML = `<div class="row"><div class="text"><div class="title">${esc(title)}</div><div class="desc">${esc(desc)}</div></div><div class="controls">${controls}</div></div>`;
