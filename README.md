@@ -1,10 +1,10 @@
 # Heads-up
 
-Spoken alerts on your Mac when Claude Code finishes a task or needs you, so you can step away from the keyboard and still know when to come back.
+Spoken alerts on your Mac, Linux or Windows PC when Claude Code finishes a task or needs you, so you can step away from the keyboard and still know when to come back.
 
 > "Hello from Kosh. I need your review."
 
-Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a skill that teaches the agent when to speak up, and hooks. The agent calls one tool, `notify_user`, and your Mac plays a short line: one of 20 built-in clips, or Claude's own words in the voice you picked, spoken by a free voice that runs on your Mac or by ElevenLabs or Sarvam with your own key. It stays quiet when you're on a call, in a Focus mode, or away from home, and it can also wait until you've left the keyboard.
+Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a skill that teaches the agent when to speak up, and hooks. The agent calls one tool, `notify_user`, and your computer plays a short line: one of 20 built-in clips, or Claude's own words in the voice you picked, spoken by a free voice that runs on your computer or by ElevenLabs or Sarvam with your own key. It stays quiet when you're on a call, in Focus or Do Not Disturb, or away from home, and it can also wait until you've left the keyboard.
 
 ## What it does
 
@@ -20,19 +20,33 @@ Heads-up is a plugin for Claude Code (and Codex): a small local MCP server, a sk
 - **Automatic alerts** via Claude Code hooks: permission prompts, and turns that run longer than 2 minutes, even if Claude forgets to call the tool. Background sessions (`claude -p`, SDK workers) never trigger them.
 - **Polite by default**
   - Away detection (off by default): silent if you used the keyboard or mouse in the last 60 seconds. It's off because with several sessions open you're usually typing in another one when this one needs you; switch it on in settings.
-  - Calls and Focus: silent while a microphone is in use, or a macOS Focus is on. If the mic or camera comes on while an alert is speaking (dictation, a call), it stops at once.
-  - Stop: `headsup stop`, or the Stop button on the settings page, ends the alert mid-sentence (and drops any waiting behind it). Bind `headsup stop` to a key with a macOS Shortcut if you want one keypress.
+  - Calls and Focus: silent while a microphone or camera is in use, or while a macOS Focus or your desktop's Do Not Disturb is on. If the mic or camera comes on while an alert is speaking (dictation, a call), it stops at once.
+  - Stop: `headsup stop`, or the Stop button on the settings page, ends the alert mid-sentence (and drops any waiting behind it). Bind `headsup stop` to a key with a macOS Shortcut (or your desktop's keyboard shortcuts) if you want one keypress.
   - Locations: optionally only play on saved networks (Home, office), recognised by the router's hardware address. No GPS.
   - Quiet hours, a gap between alerts, and an hourly limit.
-- **Ear-safe volume**: if your Mac is muted or quiet, an alert briefly turns it up, then restores it. AirPods and headphones never go above 50%; speakers never above 90%.
+- **Ear-safe volume**: if your computer is muted or quiet, an alert briefly turns it up, then restores it. AirPods and headphones never go above 50%; speakers never above 90%. When Heads-up can't tell what's playing the sound, it uses the headphone limit.
 - **Settings page** at `http://127.0.0.1:4777` (`headsup`), local only.
 
 ## Requirements
 
-- macOS, Node.js 20+, Claude Code (or Codex)
-- Xcode Command Line Tools (`swiftc`) to build the microphone checker
-- `ffmpeg` (Homebrew) for anything recorded, with the local voice or your key
+- Node.js 20+ and Claude Code (or Codex), on macOS, Linux or Windows 10/11
+- `ffmpeg` for anything recorded, with the local voice or your key (`brew install ffmpeg`, `sudo apt install ffmpeg`, `winget install Gyan.FFmpeg`)
 - Optional: the local voice (about 420 MB of disk, or 210 MB for the smaller model), or an ElevenLabs and/or Sarvam API key, only for recording new lines
+
+### Platforms
+
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| Sound | built in (`afplay`) | PipeWire or PulseAudio (`pw-play`, `paplay`), else `ffplay` | built in |
+| Safe volume | built in | `pactl` or `wpctl` | Windows helper |
+| Calls (mic, camera) | call detector, built with Xcode Command Line Tools (`swiftc`) | PipeWire (`pw-dump`) or `pactl`; camera from `/dev/video*` | Windows helper (reads Windows' own mic and camera privacy record) |
+| Focus / Do Not Disturb | Focus modes, manual and scheduled | GNOME, KDE Plasma, Xfce, dunst, SwayNC, mako | Do not disturb (Focus assist on Windows 10) |
+| Away (idle) | built in | GNOME, or `xprintidle` on X11 | Windows helper |
+| Keys | Keychain | keyring via `secret-tool` (GNOME Keyring, KWallet) | Credential Manager, via the Windows helper |
+
+`headsup install` checks all of this and says what's missing. On Linux it prints the install line for your distribution (apt, dnf, pacman, zypper); no helper needs building. On Windows it builds the small helper with the C# compiler that ships with Windows (.NET Framework 4), so nothing extra is downloaded. Anything Heads-up can't see is reported on the settings page and by `headsup status`, never treated as "not on a call".
+
+Linux and Windows support is new in 1.6.0. Over SSH, in a container or on a machine with no sound server, alerts are skipped with a reason instead of playing into nothing.
 
 ## Install
 
@@ -42,7 +56,7 @@ In Claude Code, one step:
 /plugin install heads-up --marketplace abhishek207/headsup-mcp
 ```
 
-Or from a terminal, which also builds the call detector and adds the `headsup` command:
+Or from a terminal, which also builds the helper your system needs and adds the `headsup` command:
 
 ```bash
 npx headsup-mcp install      # add --dry-run to see the changes first
@@ -50,12 +64,12 @@ npx headsup-mcp install      # add --dry-run to see the changes first
 
 From a checkout, `npm run setup` does the same with the local copy. It's safe to run again after an update. It:
 
-1. checks Node and ffmpeg,
-2. builds the call detector into the data folder (needs `swiftc`),
+1. checks Node and ffmpeg, and on Linux the sound, call and keyring tools,
+2. builds the helper into the data folder: the call detector on macOS (needs `swiftc`), the Windows helper on Windows; Linux needs none,
 3. adds the heads-up marketplace and installs the plugin in Claude Code, and allows its `notify_user` tool in `~/.claude/settings.json` (backup in `settings.json.heads-up-backup`). Without the allow rule the first alert in each session waits on a permission prompt, which defeats the point when you're away,
 4. removes the pre-plugin setup if it finds it (MCP entry, hooks, CLAUDE.md section), so alerts don't double,
 5. installs the plugin in Codex too if Codex is installed; trust its hooks there with `/hooks` (Codex asks again after every Heads-up update: until you do, `codex exec` reports the hooks as Failed),
-6. writes the `headsup` command to `~/.local/bin`.
+6. writes the `headsup` command to `~/.local/bin` (`%USERPROFILE%\.local\bin\headsup.cmd` on Windows, the same folder Claude Code's own installer uses).
 
 `headsup uninstall` takes it all out again and keeps your settings.
 
@@ -73,13 +87,13 @@ Check the manifests with `npm run validate`.
 
 ### Other MCP clients
 
-Any MCP client on a Mac can run the server on its own over stdio:
+Any MCP client can run the server on its own over stdio:
 
 ```bash
 npx -y headsup-mcp serve
 ```
 
-That gives the client the `notify_user` tool. The skill and hooks only come with the Claude Code plugin, and `npx headsup-mcp install` builds the call detector.
+That gives the client the `notify_user` tool. The skill and hooks only come with the Claude Code plugin, and `npx headsup-mcp install` builds the helper.
 
 ## Use
 
@@ -114,22 +128,22 @@ A free voice that runs on your Mac, for people who want project names and Claude
 
 ## API keys
 
-Only needed to record new lines with ElevenLabs or Sarvam: project names, your wording, added voices and Claude's own words. The local voice needs no key. Add them on the settings page; they go into your macOS Keychain and are never written to a file or shown again. ElevenLabs keys are checked before they're saved (free), and the Test button speaks a few words with yours. Heads-up also reads `ELEVENLABS_API_KEY` / `SARVAM_API_KEY` from the environment, and Keychain items named `elevenlabs-api-key` / `sarvam-api-key`.
+Only needed to record new lines with ElevenLabs or Sarvam: project names, your wording, added voices and Claude's own words. The local voice needs no key. Add them on the settings page; they go into your system's key store (macOS Keychain, your Linux keyring, Windows Credential Manager) and are never written to a file or shown again. ElevenLabs keys are checked before they're saved (free), and the Test button speaks a few words with yours. Heads-up also reads `ELEVENLABS_API_KEY` / `SARVAM_API_KEY` from the environment, and Keychain items named `elevenlabs-api-key` / `sarvam-api-key`.
 
 With a key, Claude's lines are sent to your provider to be spoken, so Claude is told to keep code, paths and secrets out of them, and Heads-up replaces any links, file paths, email addresses and key-like strings that slip through with "a link", "a file" and so on before anything is sent. The daily budget (1,000 characters by default) caps everything recorded automatically; what you record from the settings page isn't capped.
 
 ## Where things live
 
 - The plugin folder (Claude Code keeps it under `~/.claude/plugins/`): code and built-in voices.
-- `~/Library/Application Support/heads-up` (or `$HEADS_UP_HOME`): your settings, alert log, hook state, recordings (`segments/`, `cache/clips/`), the usage log (`usage.json`) and the local voice if you downloaded it (`local/`).
+- The data folder (or `$HEADS_UP_HOME`): `~/Library/Application Support/heads-up` on macOS, `~/.local/share/heads-up` on Linux (`$XDG_DATA_HOME/heads-up` if set), `%LOCALAPPDATA%\heads-up` on Windows. It holds your settings, alert log, hook state, recordings (`segments/`, `cache/clips/`) the usage log (`usage.json`) and the local voice if you downloaded it (`local/`).
 
 ## Privacy and security
 
-- **What leaves your Mac:** nothing, until you add a key. The local voice speaks on your Mac; downloading it fetches two files from npm and GitHub and sends nothing about you. With a key, only the text being recorded (a project's name, your wording, Claude's line) goes to ElevenLabs or Sarvam, plus free calls to list your ElevenLabs voices and plan usage. No analytics, no telemetry, no other servers.
-- **What stays on your Mac:** the call, Focus, away and location checks all run locally. The mic and camera check only asks macOS whether a device is in use; it never opens one or records anything. Locations are your router's hardware address, kept in your settings file. The alert log (including Claude's lines) is in the data folder above, readable only by you.
-- **Keys:** in the macOS Keychain (or your environment), never in a file, a log or the settings page. `headsup uninstall` keeps them in case you reinstall and prints the command to remove them.
+- **What leaves your computer:** nothing, until you add a key. The local voice speaks on your computer; downloading it fetches two files from npm and GitHub and sends nothing about you. With a key, only the text being recorded (a project's name, your wording, Claude's line) goes to ElevenLabs or Sarvam, plus free calls to list your ElevenLabs voices and plan usage. No analytics, no telemetry, no other servers.
+- **What stays on your computer:** the call, Focus, away and location checks all run locally. The mic and camera check only asks the system whether a device is in use (macOS, PipeWire, or Windows' privacy record); it never opens one or records anything. Locations are your router's hardware address, kept in your settings file. The alert log (including Claude's lines) is in the data folder above, readable only by you.
+- **Keys:** in your system's key store (or your environment), never in a file, a log or the settings page. `headsup uninstall` keeps them in case you reinstall and prints the command to remove them.
 - **Settings page:** listens on 127.0.0.1 only, answers only to `127.0.0.1` and `localhost` (no DNS rebinding), refuses requests from other websites, can't be framed by another site, and stops after 30 idle minutes.
-- **No dependencies:** plain Node and macOS tools. The only thing fetched at runtime is the local voice, and only when you ask for it: a pinned sherpa-onnx build and Kokoro model, each checked against a SHA checksum before use.
+- **No dependencies:** plain Node and your system's own tools. The only thing fetched at runtime is the local voice, and only when you ask for it: a pinned sherpa-onnx build and Kokoro model, each checked against a SHA checksum before use.
 - Found a security problem? See [SECURITY.md](SECURITY.md).
 
 ## Troubleshooting
@@ -137,6 +151,8 @@ With a key, Claude's lines are sent to your provider to be spoken, so Claude is 
 - `hook.log` in the data folder has one line per hook decision and why.
 - The settings page's "Recent alerts" shows every alert, played or skipped, with the reason.
 - `HEADS_UP_DISABLED=1` silences everything for one process (handy for tests).
+- "No sound output on this machine" means Heads-up found no sound server (an SSH session, a container, a Linux box without PipeWire or PulseAudio). If sound does reach you some other way, set `HEADS_UP_ASSUME_AUDIO=1`.
+- Linux: `headsup status` says which detectors can't see anything on your desktop (Do Not Disturb on some desktops, idle time on KDE Wayland), and those checks are simply skipped there.
 - Codex doesn't tell hooks whether a session is interactive, so a long `codex exec` run also announces when it finishes. Claude Code's background runs (`claude -p`, SDK) are ignored.
 - Codex in full-auto ("YOLO") mode never asks for approval, so the approval alert never fires there.
 

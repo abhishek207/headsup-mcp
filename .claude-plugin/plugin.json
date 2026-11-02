@@ -2,7 +2,7 @@
   "name": "heads-up",
   "displayName": "Heads-up",
   "version": "1.6.0",
-  "description": "Spoken voice alerts on your Mac when your coding agent finishes a task or needs you.",
+  "description": "Spoken voice alerts on your Mac, Linux or Windows PC when your coding agent finishes a task or needs you.",
   "author": {
     "name": "Brand Bakery",
     "url": "https://brandbakery.tech"
@@ -14,6 +14,8 @@
     "alerts",
     "notifications",
     "macos",
+    "linux",
+    "windows",
     "tts"
   ],
   "mcpServers": {

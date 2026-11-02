@@ -1,11 +1,11 @@
 ---
 name: heads-up
-description: When and how to call the heads-up notify_user tool, which speaks a short alert on the user's Mac so they come back to the computer. Use at the end of any turn where the user has to act (review, input, approval, an answer), when a long task finishes or fails, and when starting work they can walk away from.
+description: When and how to call the heads-up notify_user tool, which speaks a short alert on the user's computer so they come back to the computer. Use at the end of any turn where the user has to act (review, input, approval, an answer), when a long task finishes or fails, and when starting work they can walk away from.
 ---
 
 # Heads-up voice alerts
 
-The user may have walked away from the computer. `notify_user` plays a short spoken line on their Mac ("Hello. I need your review.") so they hear it from across the room. One well-timed alert brings them back; a stream of them gets the tool switched off.
+The user may have walked away from the computer. `notify_user` plays a short spoken line on their computer ("Hello. I need your review.") so they hear it from across the room. One well-timed alert brings them back; a stream of them gets the tool switched off.
 
 ## When to call it
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // heads-up: a tiny zero-dependency MCP server (stdio) that plays a short
-// voice line on the Mac speaker so the user hears when Claude needs them or has
+// voice line on the user's computer so they hear when Claude needs them or has
 // finished: a pre-recorded line, or Claude's own words recorded with the free
 // local voice or the user's ElevenLabs or Sarvam key. Guardrails and settings live in core.mjs and
 // config.json; run `headsup` for the settings page.
@@ -20,7 +20,7 @@ const PREPARE_WAIT_MS = 15_000; // how long the tool waits for a live line to be
 const TOOL = {
   name: "notify_user",
   description:
-    "Play a short spoken alert on the user's Mac speaker so they can come back to the computer. " +
+    "Play a short spoken alert on the user's computer speakers so they can come back to it. " +
     "Call it once at the end of a turn (or when starting something long), picking the status that matches why you stopped:\n" +
     TEMPLATES.map((t) => `- ${t.id}: ${t.when} ("${textFor(t.id, config)}")`).join("\n") +
     "\nTheir settings (off switch, mute, quiet hours, location lock, cooldown) may block it; a skipped alert is not an error, so don't retry.",
@@ -165,7 +165,7 @@ async function handle(msg) {
   }
 }
 
-// Claude Code shows server stderr in its MCP logs; say so if calls or Focus can't be detected.
+// Claude Code shows server stderr in its MCP logs; say so if calls or Focus / Do Not Disturb can't be detected.
 for (const p of detectorProblems()) process.stderr.write(`heads-up: ${p}\n`);
 
 const send = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");

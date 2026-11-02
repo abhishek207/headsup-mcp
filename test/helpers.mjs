@@ -11,8 +11,10 @@ process.env.HEADS_UP_NO_KEYCHAIN = "1";
 delete process.env.ELEVENLABS_API_KEY;
 delete process.env.SARVAM_API_KEY;
 delete process.env.HEADS_UP_FAKE_TTS;
+// Tests run over SSH and in containers too: don't let "no sound output" hide the other guardrails.
+process.env.HEADS_UP_ASSUME_AUDIO = "1";
 
-// Config with every live detector off, so results don't depend on the Mac running the tests.
+// Config with every live detector off, so results don't depend on the computer running the tests.
 export const quiet = { calls: { mic: false, camera: false, focus: false }, away: { enabled: false } };
 // quiet, with the key-only features (project names, the model's own lines) switched on.
 export const optedIn = { ...quiet, project_names: { enabled: true }, live: { enabled: true } };
