@@ -23,7 +23,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DATA, HELPER, ROOT, rememberRoot } from "../paths.mjs";
 import { has, which } from "../platform/common.mjs";
@@ -149,6 +149,8 @@ async function main() {
   const claudeDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
   const settingsFile = join(claudeDir, "settings.json");
   const mdFile = join(claudeDir, "CLAUDE.md");
+  const home = homedir();
+  const settingsShown = settingsFile.startsWith(home + sep) ? `~${settingsFile.slice(home.length)}` : settingsFile;
   const binDir = join(homedir(), ".local", "bin");
   const link = join(binDir, process.platform === "win32" ? "headsup.cmd" : "headsup");
   const linkShown = process.platform === "win32" ? "%USERPROFILE%\\.local\\bin\\headsup.cmd" : "~/.local/bin/headsup";
@@ -215,7 +217,7 @@ async function main() {
     }
     if (codex) step("uninstall the heads-up plugin from Codex", "codex", ["plugin", "remove", PLUGIN], (r) => /not installed|not found/i.test(why(r)));
     if (codex) step("remove the heads-up marketplace from Codex", "codex", ["plugin", "marketplace", "remove", MARKETPLACE], (r) => /not found/i.test(why(r)));
-    editSettings(withoutHeadsUp, "remove heads-up's allow rule and any old hooks from ~/.claude/settings.json");
+    editSettings(withoutHeadsUp, `remove heads-up's allow rule and any old hooks from ${settingsShown}`);
     removeOldSection();
     if (ourShim()) act(`remove ${linkShown}`, () => rmSync(link));
     if (existsSync(join(DATA, "root"))) act("forget where the plugin was installed", () => rmSync(join(DATA, "root")));
@@ -262,7 +264,7 @@ async function main() {
     step("refresh the heads-up marketplace", "claude", ["plugin", "marketplace", "update", MARKETPLACE]);
     step("install the heads-up plugin in Claude Code", "claude", ["plugin", "install", PLUGIN], already);
     step("update the heads-up plugin to the latest version", "claude", ["plugin", "update", PLUGIN], already);
-    editSettings(withHeadsUp, "allow heads-up's notify_user tool in ~/.claude/settings.json (and drop pre-plugin hooks)");
+    editSettings(withHeadsUp, `allow heads-up's notify_user tool in ${settingsShown} (and drop pre-plugin hooks)`);
     removeOldSection();
   } else {
     todo.push(`claude plugin marketplace add ${quote(source)}`, `claude plugin install ${PLUGIN}`);
