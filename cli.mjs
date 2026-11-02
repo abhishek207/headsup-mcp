@@ -140,7 +140,7 @@ switch (cmd) {
       try {
         const s = await installLocal({ model, onProgress: show });
         process.stderr.write("\n");
-        const m = s.measured ? ` On this Mac a new line took ${s.measured.seconds} s and ${s.measured.memory} MB of memory.` : "";
+        const m = s.measured ? ` On this ${PLATFORM_WORDS.machine} a new line took ${s.measured.seconds} s and ${s.measured.memory} MB of memory.` : "";
         console.log(`The local voice (${MODELS[model].label.toLowerCase()}) is ready.${m} Pick one of its voices on the settings page: run headsup.`);
       } catch (e) {
         process.stderr.write("\n");
@@ -158,7 +158,7 @@ switch (cmd) {
       if (!s.supported) console.log("Not available on this computer.");
       else if (s.ready) {
         const m = MODELS[s.model];
-        const here = s.measured ? ` On this Mac a new line takes ${s.measured.seconds} s and ${s.measured.memory} MB of memory.` : "";
+        const here = s.measured ? ` On this ${PLATFORM_WORDS.machine} a new line takes ${s.measured.seconds} s and ${s.measured.memory} MB of memory.` : "";
         console.log(`Ready: ${m.label.toLowerCase()}, ${s.voices} voices, about ${mb(m.disk)} on disk.${here}`);
         const other = s.models.find((x) => x.id !== s.model);
         console.log(`Switch with: headsup local install ${other.id}. Remove with: headsup local remove`);

@@ -1,6 +1,6 @@
 {
   "name": "headsup-mcp",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "mcpName": "io.github.abhishek207/headsup-mcp",
   "description": "Spoken voice alerts on your Mac, Linux or Windows PC when Claude Code or Codex finishes a task or needs you.",
   "keywords": [
